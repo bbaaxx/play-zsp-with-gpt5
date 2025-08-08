@@ -1,0 +1,7 @@
+[12/10/2023, 21:15] Juan: ¿Salimos mañana?
+[12/10/2023, 21:16] María: Sí, ¿a qué hora te viene bien?
+[12/10/2023, 21:17] Juan: A las 20:30 en el centro.
+[12/10/2023, 21:20] Pedro: Me apunto. ¿Reservo mesa?
+12/10/23, 21:22 - María: Sí, para tres personas por favor.
+12/10/23, 21:25 - Pedro: Listo, 20:30 en La Trattoria.
+
