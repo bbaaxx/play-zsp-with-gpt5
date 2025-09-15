@@ -1,0 +1,41 @@
+# Prometheus configuration for WhatsApp RAG (ES) monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+scrape_configs:
+  # Monitor the WhatsApp RAG application
+  - job_name: 'whatsapp-rag'
+    static_configs:
+      - targets: ['whatsapp-rag:7860']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scheme: http
+
+  # Monitor Nginx reverse proxy
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:9113']
+    scrape_interval: 30s
+
+  # Monitor system metrics with node_exporter
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+  # Monitor container metrics with cAdvisor
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093

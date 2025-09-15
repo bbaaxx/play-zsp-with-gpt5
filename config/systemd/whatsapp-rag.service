@@ -1,0 +1,65 @@
+# Systemd service file for WhatsApp RAG (ES)
+# Install to /etc/systemd/system/whatsapp-rag.service
+
+[Unit]
+Description=WhatsApp RAG Service - Spanish Language Chat Analysis
+Documentation=https://github.com/your-org/whatsapp-rag-es
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=whatsapp-rag
+Group=whatsapp-rag
+
+# Working directory
+WorkingDirectory=/opt/whatsapp-rag
+
+# Python environment
+Environment=PATH=/opt/whatsapp-rag/.venv/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+# Load environment variables from file
+EnvironmentFile=/opt/whatsapp-rag/.env
+
+# Main command
+ExecStart=/opt/whatsapp-rag/.venv/bin/python app.py
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Process management
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/whatsapp-rag/data /opt/whatsapp-rag/logs /tmp
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=4G
+CPUQuota=200%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=whatsapp-rag
+
+[Install]
+WantedBy=multi-user.target
