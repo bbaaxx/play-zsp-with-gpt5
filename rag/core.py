@@ -228,11 +228,27 @@ class RAGPipeline:
             lines.extend(snippet_lines)
         return "\n".join(lines)
 
-    def retrieve(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+        use_mmr: bool = True,
+        fetch_k: int = 25,
+        lambda_: float = 0.5,
+        senders: Optional[List[str]] = None,
+        date_from_iso: Optional[str] = None,
+        date_to_iso: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         if self.vector_store is None:
             return []
         query_emb = self.embedder.embed_texts([query])
-        _, metas_list = self.vector_store.search(query_emb, top_k=top_k)
+        if use_mmr:
+            _, metas_list = self.vector_store.search_mmr(
+                query_emb, top_k=top_k, fetch_k=fetch_k, lambda_=lambda_,
+                senders=senders, date_from_iso=date_from_iso, date_to_iso=date_to_iso
+            )
+        else:
+            _, metas_list = self.vector_store.search(query_emb, top_k=top_k)
         return metas_list[0] if metas_list else []
 
 

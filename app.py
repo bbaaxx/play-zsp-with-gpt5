@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 import gradio as gr
 from typing import List, Tuple, Optional, Dict, Any
 from dotenv import load_dotenv
@@ -44,6 +45,13 @@ except Exception:
 
 
 load_dotenv()
+
+# Basic logging setup
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger("app")
 
 
 class AppState:
@@ -89,6 +97,7 @@ def index_file(file_obj) -> str:
             content = f.read()
     except Exception as e:
         return f"No se pudo leer el archivo: {e}"
+    logger.info("Indexando archivo: %s (tamaño=%d bytes)", path, len(content))
     STATE.loaded_text = content
     messages = parse_whatsapp_txt(content)
     pipe = ensure_pipeline()
@@ -96,6 +105,16 @@ def index_file(file_obj) -> str:
     n_msgs = len(messages)
     n_chunks = len(pipe.chunks)
     size = pipe.vector_store.size() if pipe.vector_store else 0
+    backend = (
+        "FAISS" if (pipe.vector_store and getattr(pipe.vector_store, "index", None) is not None) else "numpy"
+    )
+    logger.info(
+        "Indexado completado — mensajes=%d, chunks=%d, indice=%d, backend=%s",
+        n_msgs,
+        n_chunks,
+        size,
+        backend,
+    )
     if n_msgs == 0:
         preview = "\n".join(content.splitlines()[:3])
         return (
@@ -103,7 +122,7 @@ def index_file(file_obj) -> str:
             "No se detectaron mensajes. Verifica que el archivo sea un export estándar de WhatsApp (TXT).\n"
             f"Primeras líneas leídas:\n{preview}"
         )
-    return f"Indexado OK — mensajes: {n_msgs}, chunks: {n_chunks}, tamaño índice: {size}"
+    return f"Indexado OK — mensajes: {n_msgs}, chunks: {n_chunks}, tamaño índice: {size} (backend: {backend})"
 
 
 def clear_state():
@@ -122,15 +141,40 @@ def _llm_client() -> Optional[OpenAI]:
         return None
     # Avoid passing unsupported kwargs through environment-proxies bug in httpx
     # Build minimal client with only api_key and base_url
+    logger.info("Creando cliente LLM (base_url=%s)", base_url)
     return OpenAI(api_key=token, base_url=base_url)  # type: ignore[arg-type]
 
 
-def chat(user_msg: str, top_k: int, model_name: str) -> Tuple[List[Tuple[str, str]], str]:
+def chat(
+    user_msg: str,
+    top_k: int,
+    model_name: str,
+    use_mmr: bool = True,
+    lambda_: float = 0.5,
+    fetch_k: int = 25,
+    senders: Optional[List[str]] = None,
+    date_from_iso: Optional[str] = None,
+    date_to_iso: Optional[str] = None,
+) -> Tuple[List[Tuple[str, str]], str]:
     if not user_msg.strip():
         return STATE.chat_history, "Escribe una pregunta."
     pipe = ensure_pipeline()
-    retrieved = pipe.retrieve(user_msg, top_k=top_k)
+    logger.info(
+        "Consulta recibida — top_k=%s, MMR=%s, λ=%.2f, fetch_k=%s, senders=%s, dfrom=%s, dto=%s",
+        top_k, use_mmr, lambda_, fetch_k, senders, date_from_iso, date_to_iso,
+    )
+    retrieved = pipe.retrieve(
+        user_msg,
+        top_k=top_k,
+        use_mmr=use_mmr,
+        fetch_k=fetch_k,
+        lambda_=lambda_,
+        senders=senders,
+        date_from_iso=date_from_iso,
+        date_to_iso=date_to_iso,
+    )
     context = pipe.format_context(retrieved)
+    logger.info("Recuperados %d fragmentos", len(retrieved))
     user_prompt = build_user_prompt(context, user_msg)
 
     client = _llm_client()
@@ -151,8 +195,10 @@ def chat(user_msg: str, top_k: int, model_name: str) -> Tuple[List[Tuple[str, st
                 max_tokens=800,
             )
             answer = resp.choices[0].message.content or "(sin contenido)"
+            logger.info("Respuesta LLM generada (%d chars)", len(answer))
         except Exception as e:  # pragma: no cover
             answer = f"Error al llamar al modelo: {e}"
+            logger.exception("Fallo en llamada al LLM")
 
     STATE.chat_history.append((user_msg, answer))
     return STATE.chat_history, ""
@@ -170,6 +216,13 @@ def build_ui() -> gr.Blocks:
         with gr.Row():
             topk = gr.Slider(1, 10, value=5, step=1, label="Top-k")
             model = gr.Textbox(value=os.environ.get("CHAT_MODEL", "openai/gpt-4o"), label="Modelo LLM")
+            mmr = gr.Checkbox(value=True, label="MMR")
+            lambda_box = gr.Slider(0.0, 1.0, value=0.5, step=0.05, label="λ (MMR)")
+            fetchk = gr.Slider(5, 50, value=25, step=1, label="fetch_k")
+        with gr.Row():
+            sender_filter = gr.Textbox(label="Filtrar por remitente(s), separados por coma", placeholder="María, Juan")
+            date_from = gr.Textbox(label="Desde (ISO)", placeholder="2025-06-01T00:00")
+            date_to = gr.Textbox(label="Hasta (ISO)", placeholder="2025-06-30T23:59")
         with gr.Row():
             index_btn = gr.Button("Indexar")
             reindex_btn = gr.Button("Reindexar")
@@ -187,14 +240,26 @@ def build_ui() -> gr.Blocks:
         reindex_btn.click(fn=do_index, inputs=[file_input], outputs=[status])
         clear_btn.click(fn=clear_state, inputs=[], outputs=[chatbot, status])
 
-        def on_send(msg, k, m):
-            chat_hist, err = chat(msg, int(k), m)
+        def on_send(msg, k, m, use_mmr, lam, fk, senders, dfrom, dto):
+            # normalize sender list
+            senders_list = [s.strip() for s in (senders or "").split(',') if s.strip()]
+            chat_hist, err = chat(
+                msg, int(k), m, use_mmr, float(lam), int(fk), senders_list or None, dfrom or None, dto or None
+            )
             if err:
-                return chat_hist, err
-            return chat_hist, ""
+                return chat_hist, err, gr.update(value="")
+            return chat_hist, "", gr.update(value="")
 
-        send_btn.click(fn=on_send, inputs=[user_input, topk, model], outputs=[chatbot, status])
-        user_input.submit(fn=on_send, inputs=[user_input, topk, model], outputs=[chatbot, status])
+        send_btn.click(
+            fn=on_send,
+            inputs=[user_input, topk, model, mmr, lambda_box, fetchk, sender_filter, date_from, date_to],
+            outputs=[chatbot, status, user_input]
+        )
+        user_input.submit(
+            fn=on_send,
+            inputs=[user_input, topk, model, mmr, lambda_box, fetchk, sender_filter, date_from, date_to],
+            outputs=[chatbot, status, user_input]
+        )
 
     return demo
 
@@ -204,6 +269,7 @@ if __name__ == "__main__":
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "7860"))
     share = os.environ.get("GRADIO_SHARE", "0") == "1"
+    logger.info("Lanzando app en http://%s:%s (share=%s)", host, port, share)
     ui.launch(server_name=host, server_port=port, show_api=False, share=share)
 
 
