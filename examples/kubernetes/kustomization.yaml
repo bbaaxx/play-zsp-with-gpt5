@@ -1,0 +1,46 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: whatsapp-rag
+
+resources:
+  - deployment.yaml
+
+images:
+  - name: whatsapp-rag
+    newTag: latest
+
+commonLabels:
+  app.kubernetes.io/name: whatsapp-rag
+  app.kubernetes.io/component: web-service
+  app.kubernetes.io/part-of: whatsapp-rag-system
+
+namespace: default
+
+configMapGenerator:
+  - name: whatsapp-rag-config
+    literals:
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7860
+      - OPENAI_API_BASE=https://models.inference.ai.azure.com
+      - MODEL_NAME=gpt-4o-mini
+
+secretGenerator:
+  - name: whatsapp-rag-secrets
+    literals:
+      - openai-api-key=YOUR_GITHUB_TOKEN_HERE
+      - github-token=YOUR_GITHUB_TOKEN_HERE
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: whatsapp-rag
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom
+        value:
+          - configMapRef:
+              name: whatsapp-rag-config

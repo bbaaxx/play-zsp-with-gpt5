@@ -1,0 +1,74 @@
+# Prometheus configuration for WhatsApp RAG monitoring
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'whatsapp-rag-cluster'
+    replica: 'prometheus-01'
+
+# Alertmanager configuration (if using)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Load rules and alerts
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # WhatsApp RAG application metrics
+  - job_name: 'whatsapp-rag'
+    static_configs:
+      - targets: ['whatsapp-rag:7860']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'
+
+  # Nginx metrics (if nginx-prometheus-exporter is used)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:8080']
+    metrics_path: '/nginx_status'
+
+  # Redis metrics (if redis_exporter is used)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+
+  # Node exporter for system metrics (if deployed)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+
+# Example alerting rules (save to first_rules.yml if using)
+# groups:
+#   - name: whatsapp-rag-alerts
+#     rules:
+#     - alert: HighResponseTime
+#       expr: rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m]) > 0.5
+#       for: 2m
+#       labels:
+#         severity: warning
+#       annotations:
+#         summary: "High response time detected"
+#         description: "Response time is {{ $value }}s for instance {{ $labels.instance }}"
+#     
+#     - alert: HighErrorRate
+#       expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+#       for: 2m
+#       labels:
+#         severity: critical
+#       annotations:
+#         summary: "High error rate detected"
+#         description: "Error rate is {{ $value | humanizePercentage }} for instance {{ $labels.instance }}"

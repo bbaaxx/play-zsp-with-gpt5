@@ -1,0 +1,385 @@
+# WhatsApp RAG System Configuration
+# Complete configuration file for different deployment scenarios
+
+# =============================================================================
+# EMBEDDING CONFIGURATION
+# =============================================================================
+
+embedding:
+  # Model selection based on requirements
+  # For Spanish optimized:
+  model_name: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  
+  # Alternative models:
+  # High quality (slower): "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+  # Fast (lower quality): "sentence-transformers/paraphrase-MiniLM-L3-v2"
+  # English only: "sentence-transformers/all-MiniLM-L6-v2"
+  
+  # Device configuration
+  device: "cpu"  # or "cuda" if GPU available
+  
+  # Batch processing
+  batch_size: 32
+  max_seq_length: 512
+  normalize_embeddings: true
+  
+  # Caching
+  cache_embeddings: true
+  cache_size: 1000
+
+# =============================================================================
+# TEXT PROCESSING CONFIGURATION  
+# =============================================================================
+
+text_processing:
+  # Chunking strategy
+  chunk_size: 800
+  chunk_overlap: 150
+  
+  # Alternative chunking strategies:
+  # Long documents: chunk_size: 1500, chunk_overlap: 300
+  # Short messages: chunk_size: 500, chunk_overlap: 100
+  # Maximum precision: chunk_size: 800, chunk_overlap: 200
+  
+  # Text cleaning
+  remove_urls: true
+  remove_phone_numbers: false  # Keep for WhatsApp context
+  remove_emails: false
+  normalize_whitespace: true
+  min_chunk_length: 50
+  max_chunk_length: 2000
+
+# =============================================================================
+# RETRIEVAL AND RAG CONFIGURATION
+# =============================================================================
+
+rag:
+  # Retrieval parameters
+  top_k: 5
+  similarity_threshold: 0.7
+  max_context_length: 4000
+  
+  # Maximum Memory Retrieval (MMR)
+  use_mmr: true
+  mmr_lambda: 0.6  # 0.0 = max diversity, 1.0 = max relevance
+  fetch_k: 20     # Initial retrieval size for MMR
+  
+  # Reranking (if available)
+  enable_reranking: false
+  reranking_model: ""
+  reranking_top_k: 10
+  
+  # Context formatting
+  include_metadata: true
+  include_timestamps: true
+  include_sender: true
+  context_separator: "\n---\n"
+
+# =============================================================================
+# VECTOR STORE CONFIGURATION
+# =============================================================================
+
+vector_store:
+  # Backend selection
+  type: "faiss"  # Options: faiss, numpy, chroma, pinecone
+  
+  # FAISS specific settings
+  faiss:
+    index_type: "IndexFlatIP"  # Options: IndexFlatIP, IndexIVFFlat, IndexHNSWFlat
+    nlist: 100  # For IVF indices
+    hnsw_m: 16  # For HNSW indices
+    hnsw_ef_construction: 200
+    hnsw_ef_search: 50
+    
+  # Persistence
+  persist_directory: "./indices"
+  save_every_n_additions: 100
+  
+  # Memory management
+  max_memory_gb: 2.0
+
+# =============================================================================
+# LLM CONFIGURATION
+# =============================================================================
+
+llm:
+  # Model settings
+  model_name: "gpt-4o-mini"
+  base_url: "https://models.inference.ai.azure.com"
+  
+  # Generation parameters
+  temperature: 0.3
+  max_tokens: 1000
+  top_p: 0.9
+  frequency_penalty: 0.0
+  presence_penalty: 0.0
+  
+  # Timeout and retries
+  timeout: 30
+  max_retries: 3
+  retry_delay: 1
+  
+  # Rate limiting
+  requests_per_minute: 60
+  concurrent_requests: 5
+
+# =============================================================================
+# WHATSAPP PARSER CONFIGURATION
+# =============================================================================
+
+whatsapp_parser:
+  # Date formats to support
+  date_formats:
+    - "%d/%m/%Y, %H:%M"
+    - "%m/%d/%Y, %I:%M %p"
+    - "%Y-%m-%d %H:%M:%S"
+  
+  # Message filtering
+  filter_system_messages: true
+  filter_media_messages: false
+  min_message_length: 1
+  max_message_length: 10000
+  
+  # Anonymization (for privacy)
+  anonymize_users: false
+  anonymize_phone_numbers: false
+  placeholder_user: "Usuario{n}"
+  
+  # Language detection
+  detect_language: true
+  default_language: "es"
+
+# =============================================================================
+# PERFORMANCE CONFIGURATION
+# =============================================================================
+
+performance:
+  # Threading and multiprocessing
+  max_workers: 4
+  chunk_processing_batch_size: 100
+  
+  # Memory management
+  max_memory_usage_mb: 2048
+  gc_threshold: 1000
+  
+  # Caching
+  enable_cache: true
+  cache_ttl: 3600
+  cache_max_size: 500
+  
+  # Preloading
+  preload_embeddings: false
+  preload_models: true
+
+# =============================================================================
+# LOGGING AND MONITORING
+# =============================================================================
+
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # File logging
+  log_file: "logs/whatsapp_rag.log"
+  max_file_size_mb: 10
+  backup_count: 5
+  
+  # Structured logging
+  use_json_format: false
+  include_trace_id: false
+
+monitoring:
+  # Metrics collection
+  enable_metrics: true
+  metrics_port: 9090
+  
+  # Performance tracking
+  track_query_performance: true
+  track_embedding_performance: true
+  track_memory_usage: true
+  
+  # Health checks
+  health_check_interval: 30
+  
+  # Alerting
+  alert_on_errors: false
+  alert_threshold_error_rate: 0.05
+
+# =============================================================================
+# DEPLOYMENT SPECIFIC CONFIGURATIONS
+# =============================================================================
+
+# Development configuration
+development:
+  embedding:
+    model_name: "sentence-transformers/all-MiniLM-L6-v2"
+    batch_size: 16
+    cache_size: 100
+  
+  text_processing:
+    chunk_size: 500
+    chunk_overlap: 100
+  
+  rag:
+    top_k: 3
+    max_context_length: 2000
+  
+  performance:
+    max_workers: 2
+    chunk_processing_batch_size: 50
+  
+  logging:
+    level: "DEBUG"
+
+# Production configuration
+production:
+  embedding:
+    model_name: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    batch_size: 64
+    device: "cuda"  # If GPU available
+    cache_size: 2000
+  
+  text_processing:
+    chunk_size: 1000
+    chunk_overlap: 200
+  
+  rag:
+    top_k: 8
+    max_context_length: 6000
+    enable_reranking: true
+  
+  vector_store:
+    faiss:
+      index_type: "IndexIVFFlat"
+      nlist: 1000
+  
+  performance:
+    max_workers: 8
+    chunk_processing_batch_size: 200
+    max_memory_usage_mb: 8192
+  
+  logging:
+    level: "WARNING"
+    use_json_format: true
+    include_trace_id: true
+  
+  monitoring:
+    enable_metrics: true
+    alert_on_errors: true
+
+# =============================================================================
+# USE CASE SPECIFIC CONFIGURATIONS
+# =============================================================================
+
+# Configuration for analyzing long conversations
+long_conversations:
+  text_processing:
+    chunk_size: 1200
+    chunk_overlap: 250
+  
+  rag:
+    top_k: 8
+    max_context_length: 8000
+    mmr_lambda: 0.7
+  
+  llm:
+    max_tokens: 3000
+    temperature: 0.5
+
+# Configuration for quick information retrieval
+quick_search:
+  text_processing:
+    chunk_size: 600
+    chunk_overlap: 100
+  
+  rag:
+    top_k: 3
+    similarity_threshold: 0.8
+    use_mmr: false
+  
+  performance:
+    max_workers: 6
+  
+  llm:
+    max_tokens: 500
+    temperature: 0.1
+
+# Configuration for detailed analysis with broad context
+detailed_analysis:
+  rag:
+    top_k: 10
+    similarity_threshold: 0.6
+    max_context_length: 10000
+    fetch_k: 50
+  
+  llm:
+    max_tokens: 4000
+    temperature: 0.4
+  
+  performance:
+    chunk_processing_batch_size: 300
+
+# =============================================================================
+# SECURITY AND PRIVACY CONFIGURATION
+# =============================================================================
+
+security:
+  # Data anonymization
+  anonymize_personal_data: true
+  anonymize_phone_numbers: true
+  anonymize_emails: true
+  
+  # Content filtering
+  filter_sensitive_content: true
+  blocked_patterns:
+    - "password"
+    - "ssn"
+    - "social security"
+    - "credit card"
+  
+  # Access control
+  require_authentication: true
+  session_timeout: 3600
+  
+  # Rate limiting
+  requests_per_minute: 30
+  max_file_size_mb: 10
+
+# =============================================================================
+# EXPERIMENTAL FEATURES
+# =============================================================================
+
+experimental:
+  # Advanced retrieval techniques
+  use_hybrid_search: false
+  use_query_expansion: false
+  use_semantic_clustering: false
+  
+  # Model optimizations
+  use_quantized_models: false
+  use_onnx_models: false
+  
+  # Advanced caching
+  use_persistent_cache: false
+  use_distributed_cache: false
+
+# =============================================================================
+# USAGE EXAMPLES
+# =============================================================================
+
+# To use a specific configuration:
+#
+# import yaml
+# with open("rag_config.yaml") as f:
+#     config = yaml.safe_load(f)
+# 
+# # Use base configuration
+# embedding_config = config['embedding']
+# 
+# # Or use environment-specific configuration
+# if environment == 'production':
+#     embedding_config = {**config['embedding'], **config['production']['embedding']}
+#
+# # Or use use-case specific configuration
+# if use_case == 'long_conversations':
+#     rag_config = {**config['rag'], **config['long_conversations']['rag']}

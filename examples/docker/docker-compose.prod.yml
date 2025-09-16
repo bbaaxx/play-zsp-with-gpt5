@@ -1,0 +1,150 @@
+# Production Docker Compose configuration
+version: '3.8'
+
+services:
+  whatsapp-rag:
+    build: 
+      context: ../../
+      dockerfile: examples/docker/production.Dockerfile
+    container_name: whatsapp-rag-prod
+    ports:
+      - "7860:7860"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - OPENAI_API_BASE=https://models.inference.ai.azure.com
+      - MODEL_NAME=gpt-4o-mini
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7860
+      - LOG_LEVEL=WARNING
+      - GRADIO_USERNAME=${GRADIO_USERNAME:-admin}
+      - GRADIO_PASSWORD=${GRADIO_PASSWORD}
+      - MAX_REQUESTS_PER_MINUTE=${MAX_REQUESTS_PER_MINUTE:-60}
+      - ENABLE_METRICS=true
+    volumes:
+      - whatsapp_data:/app/data:ro
+      - app_logs:/app/logs
+      - app_cache:/app/cache
+      - app_indices:/app/indices
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    networks:
+      - whatsapp-rag-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whatsapp-rag.rule=Host(`your-domain.com`)"
+      - "traefik.http.services.whatsapp-rag.loadbalancer.server.port=7860"
+
+  nginx:
+    image: nginx:alpine
+    container_name: whatsapp-rag-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/ssl/certs:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      whatsapp-rag:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - whatsapp-rag-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: whatsapp-rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - whatsapp-rag-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+    profiles:
+      - cache
+
+  # Monitoring with Prometheus (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: whatsapp-rag-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    restart: unless-stopped
+    networks:
+      - whatsapp-rag-network
+    profiles:
+      - monitoring
+
+  # Grafana for dashboards (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: whatsapp-rag-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    restart: unless-stopped
+    networks:
+      - whatsapp-rag-network
+    profiles:
+      - monitoring
+
+volumes:
+  whatsapp_data:
+  app_logs:
+  app_cache:
+  app_indices:
+  nginx_logs:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  whatsapp-rag-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
