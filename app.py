@@ -132,7 +132,56 @@ def clear_state():
     return [], "Estado limpiado."
 
 
-def _llm_client() -> Optional[OpenAI]:
+def check_llm_status():
+    """Check the status of all LLM and embedding providers."""
+    pipe = ensure_pipeline()
+    
+    # LLM providers
+    llm_providers = pipe.llm_manager.list_providers()
+    status_lines = ["=== Estado de Proveedores ===\n"]
+    
+    if llm_providers:
+        status_lines.append("🤖 Proveedores LLM (Chat):")
+        available_count = 0
+        for provider in llm_providers:
+            status = "✅ Disponible" if provider["available"] else "❌ No disponible"
+            status_lines.append(f"  - {provider['name']}: {status}")
+            if provider["available"]:
+                available_count += 1
+        status_lines.append(f"  Disponibles: {available_count}/{len(llm_providers)}\n")
+    else:
+        status_lines.append("🤖 Proveedores LLM: No configurados\n")
+    
+    # Embedding providers status
+    status_lines.append("🔍 Proveedores Embeddings:")
+    embedder = pipe.embedder
+    
+    # Check LM Studio embeddings
+    if embedder.use_lm_studio and embedder._lm_studio_provider:
+        lm_available = embedder._lm_studio_provider.is_available()
+        status = "✅ Disponible" if lm_available else "❌ No disponible"
+        status_lines.append(f"  - LM Studio Embeddings: {status}")
+    else:
+        status_lines.append("  - LM Studio Embeddings: No habilitado")
+    
+    # Check GitHub Models embeddings
+    if embedder._remote_token and embedder._remote_base_url:
+        status_lines.append("  - GitHub Models Embeddings: ✅ Configurado")
+    else:
+        status_lines.append("  - GitHub Models Embeddings: ❌ No configurado")
+    
+    # Check local embeddings
+    try:
+        embedder._ensure_local_model()
+        status_lines.append("  - Local Embeddings: ✅ Disponible")
+    except:
+        status_lines.append("  - Local Embeddings: ❌ No disponible")
+    
+    return "\n".join(status_lines)
+
+
+def _legacy_llm_client() -> Optional[OpenAI]:
+    """Legacy LLM client for backwards compatibility."""
     if OpenAI is None:
         return None
     token = os.environ.get("GITHUB_TOKEN")
@@ -141,7 +190,7 @@ def _llm_client() -> Optional[OpenAI]:
         return None
     # Avoid passing unsupported kwargs through environment-proxies bug in httpx
     # Build minimal client with only api_key and base_url
-    logger.info("Creando cliente LLM (base_url=%s)", base_url)
+    logger.info("Creando cliente LLM legacy (base_url=%s)", base_url)
     return OpenAI(api_key=token, base_url=base_url)  # type: ignore[arg-type]
 
 
@@ -175,30 +224,38 @@ def chat(
     )
     context = pipe.format_context(retrieved)
     logger.info("Recuperados %d fragmentos", len(retrieved))
-    user_prompt = build_user_prompt(context, user_msg)
 
-    client = _llm_client()
-    if client is None:
-        answer = (
-            "No hay cliente LLM configurado (GITHUB_TOKEN ausente). "
-            "Sin embargo, el contexto recuperado es:\n" + context
-        )
-    else:
-        try:
-            resp = client.chat.completions.create(
-                model=model_name or os.environ.get("CHAT_MODEL", "openai/gpt-4o"),
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.2,
-                max_tokens=800,
+    # Try using the new LLM manager first
+    try:
+        answer = pipe.generate_answer(context, user_msg)
+        logger.info("Respuesta LLM generada (%d chars)", len(answer))
+    except Exception as e:
+        logger.warning("Fallo en proveedores LLM nuevos: %s", e)
+        
+        # Fallback to legacy client for backwards compatibility
+        client = _legacy_llm_client()
+        if client is None:
+            answer = (
+                f"No hay proveedores LLM disponibles. Error: {e}\n"
+                "Contexto recuperado:\n" + context
             )
-            answer = resp.choices[0].message.content or "(sin contenido)"
-            logger.info("Respuesta LLM generada (%d chars)", len(answer))
-        except Exception as e:  # pragma: no cover
-            answer = f"Error al llamar al modelo: {e}"
-            logger.exception("Fallo en llamada al LLM")
+        else:
+            try:
+                user_prompt = build_user_prompt(context, user_msg)
+                resp = client.chat.completions.create(
+                    model=model_name or os.environ.get("CHAT_MODEL", "openai/gpt-4o"),
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.2,
+                    max_tokens=800,
+                )
+                answer = resp.choices[0].message.content or "(sin contenido)"
+                logger.info("Respuesta LLM legacy generada (%d chars)", len(answer))
+            except Exception as legacy_e:
+                answer = f"Error en todos los proveedores LLM: {legacy_e}"
+                logger.exception("Fallo en cliente LLM legacy")
 
     STATE.chat_history.append((user_msg, answer))
     return STATE.chat_history, ""
@@ -215,7 +272,7 @@ def build_ui() -> gr.Blocks:
             file_input = gr.File(label="Archivo TXT de WhatsApp", file_count="single", type="filepath")
         with gr.Row():
             topk = gr.Slider(1, 10, value=5, step=1, label="Top-k")
-            model = gr.Textbox(value=os.environ.get("CHAT_MODEL", "openai/gpt-4o"), label="Modelo LLM")
+            model = gr.Textbox(value=os.environ.get("CHAT_MODEL", "openai/gpt-4o"), label="Modelo LLM (legacy)")
             mmr = gr.Checkbox(value=True, label="MMR")
             lambda_box = gr.Slider(0.0, 1.0, value=0.5, step=0.05, label="λ (MMR)")
             fetchk = gr.Slider(5, 50, value=25, step=1, label="fetch_k")
@@ -227,6 +284,7 @@ def build_ui() -> gr.Blocks:
             index_btn = gr.Button("Indexar")
             reindex_btn = gr.Button("Reindexar")
             clear_btn = gr.Button("Limpiar chat")
+            status_btn = gr.Button("Estado LLM")
         status = gr.Textbox(label="Estado", interactive=False)
 
         chatbot = gr.Chatbot(height=400)
@@ -239,6 +297,7 @@ def build_ui() -> gr.Blocks:
         index_btn.click(fn=do_index, inputs=[file_input], outputs=[status])
         reindex_btn.click(fn=do_index, inputs=[file_input], outputs=[status])
         clear_btn.click(fn=clear_state, inputs=[], outputs=[chatbot, status])
+        status_btn.click(fn=check_llm_status, inputs=[], outputs=[status])
 
         def on_send(msg, k, m, use_mmr, lam, fk, senders, dfrom, dto):
             # normalize sender list

@@ -11,6 +11,7 @@ import numpy as np
 
 from .embeddings import EmbeddingProvider
 from .vector_store import InMemoryFAISS
+from .llm_providers import LLMManager
 
 
 WHATSAPP_PATTERNS = [
@@ -192,6 +193,7 @@ def chunk_messages(messages: List[ChatMessage], window_size: int = 30, window_ov
 class RAGPipeline:
     def __init__(self) -> None:
         self.embedder = EmbeddingProvider()
+        self.llm_manager = LLMManager()
         self.vector_store: Optional[InMemoryFAISS] = None
         self.chunks: List[Chunk] = []
 
@@ -250,6 +252,24 @@ class RAGPipeline:
         else:
             _, metas_list = self.vector_store.search(query_emb, top_k=top_k)
         return metas_list[0] if metas_list else []
+
+    def generate_answer(
+        self,
+        context_snippets: str,
+        question: str,
+        temperature: float = 0.2,
+        max_tokens: int = 800
+    ) -> str:
+        """Generate an answer using the configured LLM providers."""
+        user_prompt = build_user_prompt(context_snippets, question)
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+        
+        return self.llm_manager.generate_response(
+            messages, temperature=temperature, max_tokens=max_tokens
+        )
 
 
 def build_user_prompt(context_snippets: str, question: str) -> str:
