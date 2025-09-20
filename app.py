@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import logging
 import gradio as gr
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple, Optional
 from dotenv import load_dotenv
 
 from rag.core import (

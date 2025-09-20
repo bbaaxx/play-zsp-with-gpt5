@@ -20,25 +20,22 @@ Key Advanced Concepts:
 - Cross-chat participant identification and deduplication
 """
 
-import asyncio
 import json
 import logging
 import os
 import hashlib
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Any
 import argparse
 
 import numpy as np
-import pandas as pd
 
 # Import our RAG components
 from rag.core import (
-    parse_whatsapp_txt, chunk_messages, ChatMessage, Chunk, 
-    format_message_for_window, RAGPipeline
+    parse_whatsapp_txt, chunk_messages, ChatMessage, Chunk
 )
 from rag.embeddings import EmbeddingProvider
 from rag.vector_store import InMemoryFAISS
@@ -644,7 +641,7 @@ def main():
     save_results(results, args.output_dir, config)
     
     # Print summary
-    print(f"\nBatch Processing Complete!")
+    print("\nBatch Processing Complete!")
     print(f"Files processed: {results.successful_files}/{results.total_files}")
     print(f"Total messages: {results.total_messages:,}")
     print(f"Total chunks: {results.total_chunks:,}")

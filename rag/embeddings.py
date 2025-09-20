@@ -3,7 +3,6 @@ import logging
 from typing import List, Optional, Iterable
 
 import numpy as np
-import requests
 import httpx
 
 try:

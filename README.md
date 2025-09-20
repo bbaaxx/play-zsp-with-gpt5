@@ -12,6 +12,33 @@ Una aplicación de Recuperación Aumentada por Generación (RAG) especializada e
 - **Interfaz Web**: UI intuitiva con Gradio para cargar archivos y hacer consultas
 - **Respuestas Contextualizadas**: Cita fragmentos específicos con remitente y fecha
 
+## ✨ Nuevo: Módulo de Análisis de Datos
+
+El sistema ahora incluye un módulo avanzado de análisis de datos (`rag.analysis.ChatDataFrame`) que permite análisis estructurado de mensajes de WhatsApp usando pandas:
+
+- **📊 Análisis temporal**: actividad por día/hora, rangos de fechas
+- **🔍 Filtrado avanzado**: por autor, contenido, patrones regex
+- **📈 Estadísticas**: conteo de mensajes, longitud promedio, autores más activos
+- **🔎 Búsqueda contextual**: palabras clave con mensajes de contexto
+- **💾 Exportación**: CSV para análisis externos
+- **⚡ Optimización**: tipos de datos eficientes para consultas rápidas
+
+```python
+from rag import ChatDataFrame
+
+# Cargar y analizar mensajes
+analyzer = ChatDataFrame()
+analyzer.load_from_file("mi_chat.txt")
+
+# Filtrar por autor y contenido
+juan_msgs = analyzer.filter_by_author("Juan")
+time_msgs = analyzer.filter_by_content("hora")
+
+# Estadísticas del chat
+stats = analyzer.get_message_stats()
+print(f"Total: {stats['total_messages']} mensajes")
+```
+
 ## Requisitos
 
 - Python 3.11+
@@ -71,6 +98,12 @@ LMSTUDIO_EMBEDDING_MODEL=nomic-embed-text-v1
 
 ### Configuración Híbrida
 Ambos proveedores pueden estar habilitados simultáneamente. El sistema intentará usar LM Studio primero (si está habilitado) y fallback a GitHub Models automáticamente.
+
+## Tests
+```bash
+source .venv/bin/activate
+PYTHONPATH=. pytest
+```
 
 ## Uso
 

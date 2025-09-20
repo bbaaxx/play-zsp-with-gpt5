@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import os
 import re
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 
-import numpy as np
 
 from .embeddings import EmbeddingProvider
 from .vector_store import VectorStore, create_vector_store

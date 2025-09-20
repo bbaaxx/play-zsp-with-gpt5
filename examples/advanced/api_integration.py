@@ -27,23 +27,18 @@ import json
 import logging
 import time
 import hashlib
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, AsyncGenerator, Callable
+from typing import Dict, List, Optional, Any, AsyncGenerator
 from dataclasses import dataclass, asdict
 from pathlib import Path
 import argparse
 from contextlib import asynccontextmanager
 
 import httpx
-import numpy as np
 
 # Import our RAG components
 from rag.core import (
-    parse_whatsapp_txt, RAGPipeline, ChatMessage, Chunk,
-    build_user_prompt, SYSTEM_PROMPT
+    parse_whatsapp_txt, RAGPipeline, build_user_prompt, SYSTEM_PROMPT
 )
-from rag.embeddings import EmbeddingProvider
-from rag.vector_store import InMemoryFAISS
 
 
 @dataclass
