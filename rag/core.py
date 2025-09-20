@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 
 from .embeddings import EmbeddingProvider
-from .vector_store import InMemoryFAISS
+from .vector_store import VectorStore, create_vector_store
 from .llm_providers import LLMManager
 
 
@@ -191,11 +191,15 @@ def chunk_messages(messages: List[ChatMessage], window_size: int = 30, window_ov
 
 
 class RAGPipeline:
-    def __init__(self) -> None:
+    def __init__(
+        self, vector_backend: str = "faiss", **vector_store_kwargs
+    ) -> None:
         self.embedder = EmbeddingProvider()
         self.llm_manager = LLMManager()
-        self.vector_store: Optional[InMemoryFAISS] = None
+        self.vector_store: Optional[VectorStore] = None
         self.chunks: List[Chunk] = []
+        self.vector_backend = vector_backend
+        self.vector_store_kwargs = vector_store_kwargs
 
     def index_messages(self, messages: List[ChatMessage]) -> None:
         chunks = chunk_messages(messages)
@@ -205,7 +209,11 @@ class RAGPipeline:
             self.vector_store = None
             return
         embeddings = self.embedder.embed_texts(texts)
-        vs = InMemoryFAISS(dim=embeddings.shape[1])
+        vs = create_vector_store(
+            dim=embeddings.shape[1],
+            backend=self.vector_backend,
+            **self.vector_store_kwargs,
+        )
         ids = [c.chunk_id for c in chunks]
         metas: List[Dict[str, Any]] = []
         for c in chunks:

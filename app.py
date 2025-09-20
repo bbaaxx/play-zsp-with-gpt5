@@ -66,7 +66,23 @@ STATE = AppState()
 
 def ensure_pipeline() -> RAGPipeline:
     if STATE.pipeline is None:
-        STATE.pipeline = RAGPipeline()
+        # Read vector backend configuration from environment
+        vector_backend = os.environ.get("VECTOR_BACKEND", "faiss").lower()
+        vector_store_kwargs = {}
+        
+        if vector_backend == "qdrant":
+            vector_store_kwargs.update({
+                "url": os.environ.get("QDRANT_URL", "http://localhost:6333"),
+                "api_key": os.environ.get("QDRANT_API_KEY"),
+                "collection_name": os.environ.get("QDRANT_COLLECTION_NAME", "whatsapp_rag"),
+            })
+            # Remove None values
+            vector_store_kwargs = {k: v for k, v in vector_store_kwargs.items() if v is not None}
+        
+        STATE.pipeline = RAGPipeline(
+            vector_backend=vector_backend,
+            **vector_store_kwargs
+        )
     return STATE.pipeline
 
 
@@ -105,9 +121,11 @@ def index_file(file_obj) -> str:
     n_msgs = len(messages)
     n_chunks = len(pipe.chunks)
     size = pipe.vector_store.size() if pipe.vector_store else 0
-    backend = (
-        "FAISS" if (pipe.vector_store and getattr(pipe.vector_store, "index", None) is not None) else "numpy"
-    )
+    # Determine backend type for display
+    if pipe.vector_store:
+        backend = type(pipe.vector_store).__name__.replace("VectorStore", "").replace("InMemory", "")
+    else:
+        backend = "none"
     logger.info(
         "Indexado completado — mensajes=%d, chunks=%d, indice=%d, backend=%s",
         n_msgs,
