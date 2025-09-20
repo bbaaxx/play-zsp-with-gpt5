@@ -560,7 +560,6 @@ class RAGAPIService:
             if event_type == "new_message":
                 # Process new chat message
                 chat_id = payload.get("chat_id")
-                message_data = payload.get("message", {})
                 
                 if chat_id and chat_id in self.chat_stores:
                     # In a real implementation, you would update the vector store

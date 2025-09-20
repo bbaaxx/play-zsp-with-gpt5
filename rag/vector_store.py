@@ -551,7 +551,6 @@ class QdrantVectorStore(VectorStore):
         remaining = list(range(len(candidates)))
         
         # Normalize vectors for cosine similarity
-        query_norm = query_vector / (np.linalg.norm(query_vector) + 1e-10)
         candidates_norm = candidates / (
             np.linalg.norm(candidates, axis=1, keepdims=True) + 1e-10
         )

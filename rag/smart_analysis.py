@@ -125,6 +125,39 @@ class ChatAnalyzer:
         hourly_activity = data_frame.get_hourly_activity()
         
         # Preparar contexto para el agente
+        def serialize_dataframe_dict(df_dict):
+            """Convierte claves datetime a strings para serialización JSON."""
+            if not df_dict:
+                return {}
+            
+            serialized = {}
+            for key, value in df_dict.items():
+                # Convertir claves datetime a string
+                if hasattr(key, 'strftime'):
+                    str_key = key.strftime('%Y-%m-%d') if hasattr(key, 'date') else str(key)
+                else:
+                    str_key = str(key)
+                
+                # Convertir valores que puedan ser problemáticos
+                if isinstance(value, dict):
+                    value = serialize_dataframe_dict(value)
+                
+                serialized[str_key] = value
+            
+            return serialized
+        
+        # Preparar datos de actividad diaria con conversión segura
+        daily_activity_dict = {}
+        if not daily_activity.empty:
+            daily_sample = daily_activity.head(10).to_dict()
+            daily_activity_dict = serialize_dataframe_dict(daily_sample)
+        
+        # Preparar patrones horarios con conversión segura
+        hourly_patterns_dict = {}
+        if not hourly_activity.empty:
+            hourly_dict = hourly_activity.sum(axis=1).to_dict()
+            hourly_patterns_dict = serialize_dataframe_dict(hourly_dict)
+        
         context = {
             "total_messages": stats.get("total_messages", 0),
             "unique_authors": stats.get("unique_authors", 0),
@@ -135,8 +168,8 @@ class ChatAnalyzer:
             "top_authors": dict(list(stats.get("authors", {}).items())[:5]),
             "avg_message_length": stats.get("avg_message_length", 0),
             "most_active_hour": stats.get("most_active_hour"),
-            "daily_activity_sample": daily_activity.head(10).to_dict() if not daily_activity.empty else {},
-            "hourly_patterns": hourly_activity.sum(axis=1).to_dict() if not hourly_activity.empty else {}
+            "daily_activity_sample": daily_activity_dict,
+            "hourly_patterns": hourly_patterns_dict
         }
         
         # Prompt para análisis de patrones
