@@ -12,6 +12,11 @@ from rag.core import (
     build_user_prompt,
     SYSTEM_PROMPT,
 )
+from rag import (
+    ChatDataFrame,
+    ChatAnalyzer,
+    AnalysisResult,
+)
 
 try:
     from openai import OpenAI  # type: ignore
@@ -59,6 +64,8 @@ class AppState:
         self.pipeline: Optional[RAGPipeline] = None
         self.chat_history: List[Tuple[str, str]] = []
         self.loaded_text: Optional[str] = None
+        self.chat_dataframe: Optional[ChatDataFrame] = None
+        self.last_analysis: Optional[AnalysisResult] = None
 
 
 STATE = AppState()
@@ -116,6 +123,10 @@ def index_file(file_obj) -> str:
     logger.info("Indexando archivo: %s (tamaño=%d bytes)", path, len(content))
     STATE.loaded_text = content
     messages = parse_whatsapp_txt(content)
+    
+    # Crear ChatDataFrame para análisis
+    STATE.chat_dataframe = ChatDataFrame(messages)
+    
     pipe = ensure_pipeline()
     pipe.index_messages(messages)
     n_msgs = len(messages)
@@ -147,6 +158,8 @@ def clear_state():
     STATE.pipeline = None
     STATE.chat_history = []
     STATE.loaded_text = None
+    STATE.chat_dataframe = None
+    STATE.last_analysis = None
     return [], "Estado limpiado."
 
 
@@ -192,7 +205,7 @@ def check_llm_status():
     try:
         embedder._ensure_local_model()
         status_lines.append("  - Local Embeddings: ✅ Disponible")
-    except:
+    except Exception:
         status_lines.append("  - Local Embeddings: ❌ No disponible")
     
     return "\n".join(status_lines)
@@ -279,6 +292,91 @@ def chat(
     return STATE.chat_history, ""
 
 
+def analyze_chat() -> str:
+    """Realiza un análisis inteligente del chat usando smolagents."""
+    if STATE.chat_dataframe is None or STATE.chat_dataframe.is_empty:
+        return "No hay datos de chat cargados para analizar. Primero indexa un archivo."
+    
+    try:
+        # Obtener configuración del modelo LLM
+        model_name = os.environ.get("CHAT_MODEL", "gpt-4o-mini")
+        analyzer = ChatAnalyzer(llm_model_name=model_name)
+        
+        # Realizar análisis completo
+        result = analyzer.full_analysis(STATE.chat_dataframe)
+        STATE.last_analysis = result
+        
+        # Formatear resultados para mostrar
+        output = ["=== ANÁLISIS INTELIGENTE DE CONVERSACIÓN ===\n"]
+        
+        # Tendencias identificadas
+        if result.trend_summaries:
+            output.append("🔍 **TENDENCIAS Y PATRONES:**")
+            for i, trend in enumerate(result.trend_summaries, 1):
+                output.append(f"\n{i}. **{trend.trend_type.upper()}** (confianza: {trend.confidence_score:.1%})")
+                output.append(f"   {trend.description}")
+                if trend.time_period:
+                    output.append(f"   Período: {trend.time_period}")
+                if trend.participants:
+                    output.append(f"   Participantes: {', '.join(trend.participants)}")
+        else:
+            output.append("🔍 **TENDENCIAS Y PATRONES:** No se detectaron patrones significativos.")
+        
+        # Anomalías detectadas
+        output.append("\n⚠️ **COMPORTAMIENTOS INUSUALES:**")
+        if result.anomalies:
+            for i, anomaly in enumerate(result.anomalies, 1):
+                severity_icon = "🟥" if anomaly.severity == "high" else "🟨" if anomaly.severity == "medium" else "🟩"
+                output.append(f"\n{i}. {severity_icon} **{anomaly.anomaly_type.upper()}**")
+                output.append(f"   {anomaly.description}")
+                if anomaly.participant:
+                    output.append(f"   Participante: {anomaly.participant}")
+        else:
+            output.append("No se detectaron comportamientos inusuales.")
+        
+        # Mensajes memorables
+        output.append("\n💬 **MENSAJES MEMORABLES:**")
+        if result.quotable_messages:
+            for i, quote in enumerate(result.quotable_messages, 1):
+                type_icon = "😂" if quote.quote_type == "funny" else "💭" if quote.quote_type == "insightful" else "❤️" if quote.quote_type == "emotional" else "⭐"
+                output.append(f"\n{i}. {type_icon} **{quote.sender}** ({quote.timestamp.strftime('%Y-%m-%d %H:%M')})")
+                output.append(f"   \"{quote.message}\"")
+                output.append(f"   Relevancia: {quote.relevance_score:.1%} | Tipo: {quote.quote_type}")
+                if quote.context:
+                    output.append(f"   Contexto: {quote.context}")
+        else:
+            output.append("No se encontraron mensajes especialmente memorables.")
+        
+        # Metadatos
+        output.append("\n📊 **METADATOS DEL ANÁLISIS:**")
+        output.append(f"- Mensajes analizados: {result.analysis_metadata.get('total_messages_analyzed', 0)}")
+        output.append(f"- Modelo usado: {result.analysis_metadata.get('model_used', 'N/A')}")
+        output.append(f"- Análisis realizado: {result.analysis_metadata.get('analysis_timestamp', 'N/A')}")
+        
+        return "\n".join(output)
+        
+    except Exception as e:
+        logger.exception("Error durante el análisis inteligente")
+        return f"Error durante el análisis: {e}\n\nVerifica que tengas configurado correctamente el acceso a modelos LLM (variables de entorno GITHUB_TOKEN, etc.)"
+
+
+def get_analysis_summary() -> str:
+    """Obtiene un resumen rápido del último análisis."""
+    if STATE.last_analysis is None:
+        return "No hay análisis previo disponible."
+    
+    result = STATE.last_analysis
+    summary = [
+        "📊 **Último Análisis:**",
+        f"• {len(result.trend_summaries)} tendencias identificadas",
+        f"• {len(result.anomalies)} anomalías detectadas", 
+        f"• {len(result.quotable_messages)} mensajes memorables",
+        f"• Realizado: {result.analysis_metadata.get('analysis_timestamp', 'N/A')[:19]}"
+    ]
+    
+    return "\n".join(summary)
+
+
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="WhatsApp RAG (ES)") as demo:
         gr.Markdown("""
@@ -303,11 +401,26 @@ def build_ui() -> gr.Blocks:
             reindex_btn = gr.Button("Reindexar")
             clear_btn = gr.Button("Limpiar chat")
             status_btn = gr.Button("Estado LLM")
+        with gr.Row():
+            analyze_btn = gr.Button("🔍 Analizar Conversación", variant="secondary")
+            summary_btn = gr.Button("📊 Resumen Análisis", size="sm")
         status = gr.Textbox(label="Estado", interactive=False)
 
-        chatbot = gr.Chatbot(height=400)
-        user_input = gr.Textbox(label="Tu pregunta (español)")
-        send_btn = gr.Button("Enviar")
+        # Crear pestañas para chat y análisis
+        with gr.Tabs():
+            with gr.Tab("💬 Chat RAG"):
+                chatbot = gr.Chatbot(height=400)
+                user_input = gr.Textbox(label="Tu pregunta (español)")
+                send_btn = gr.Button("Enviar")
+            
+            with gr.Tab("📈 Análisis Inteligente"):
+                analysis_output = gr.Textbox(
+                    label="Resultados del Análisis", 
+                    lines=20, 
+                    max_lines=30,
+                    interactive=False,
+                    placeholder="Haz clic en 'Analizar Conversación' para ver insights inteligentes sobre el chat..."
+                )
 
         def do_index(file):
             return index_file(file)
@@ -316,6 +429,8 @@ def build_ui() -> gr.Blocks:
         reindex_btn.click(fn=do_index, inputs=[file_input], outputs=[status])
         clear_btn.click(fn=clear_state, inputs=[], outputs=[chatbot, status])
         status_btn.click(fn=check_llm_status, inputs=[], outputs=[status])
+        analyze_btn.click(fn=analyze_chat, inputs=[], outputs=[analysis_output])
+        summary_btn.click(fn=get_analysis_summary, inputs=[], outputs=[status])
 
         def on_send(msg, k, m, use_mmr, lam, fk, senders, dfrom, dto):
             # normalize sender list

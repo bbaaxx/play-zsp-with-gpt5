@@ -1,5 +1,12 @@
 from .core import RAGPipeline, parse_whatsapp_txt, ChatMessage, Chunk
 from .analysis import ChatDataFrame
+from .smart_analysis import (
+    ChatAnalyzer,
+    TrendSummary,
+    AnomalyDetection,
+    QuotableMessage,
+    AnalysisResult,
+)
 
 __all__ = [
     "EmbeddingProvider",
@@ -12,5 +19,10 @@ __all__ = [
     "ChatMessage",
     "Chunk",
     "ChatDataFrame",
+    "ChatAnalyzer",
+    "TrendSummary",
+    "AnomalyDetection", 
+    "QuotableMessage",
+    "AnalysisResult",
 ]
 

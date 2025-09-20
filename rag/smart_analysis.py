@@ -1,0 +1,427 @@
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from datetime import datetime
+from typing import List, Dict, Any, Optional
+import re
+
+import pandas as pd
+import os
+
+# Try to import OpenAI client directly for LLM calls
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+from .analysis import ChatDataFrame
+
+
+@dataclass
+class TrendSummary:
+    """Resumen de una tendencia identificada."""
+    trend_type: str
+    description: str
+    confidence_score: float
+    supporting_data: Dict[str, Any]
+    time_period: Optional[str] = None
+    participants: Optional[List[str]] = None
+
+
+@dataclass
+class AnomalyDetection:
+    """Detección de comportamiento anómalo."""
+    anomaly_type: str
+    description: str
+    severity: str  # "low", "medium", "high"
+    timestamp: Optional[datetime] = None
+    participant: Optional[str] = None
+    metrics: Dict[str, Any] = None
+
+
+@dataclass
+class QuotableMessage:
+    """Mensaje memorable o citable."""
+    message: str
+    sender: str
+    timestamp: datetime
+    quote_type: str  # "funny", "insightful", "memorable", "emotional"
+    relevance_score: float
+    context: Optional[str] = None
+
+
+@dataclass
+class AnalysisResult:
+    """Resultado completo del análisis de chat."""
+    trend_summaries: List[TrendSummary]
+    anomalies: List[AnomalyDetection]
+    quotable_messages: List[QuotableMessage]
+    analysis_metadata: Dict[str, Any]
+
+
+class ChatAnalyzer:
+    """Analizador de conversaciones WhatsApp usando LiteLLM."""
+    
+    def __init__(self, llm_model_name: Optional[str] = None):
+        """
+        Inicializa el analizador con un modelo LLM.
+        
+        Args:
+            llm_model_name: Nombre del modelo LLM a usar (por defecto usa OpenAI GPT-4)
+        """
+        self.model_name = llm_model_name or "gpt-4o-mini"
+        
+    def _call_llm(self, prompt: str) -> str:
+        """Llama al modelo LLM con el prompt dado."""
+        if not OPENAI_AVAILABLE:
+            raise RuntimeError("OpenAI client no está disponible")
+        
+        try:
+            # Use GitHub Models API configuration
+            token = os.environ.get("GITHUB_TOKEN")
+            base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.github.ai/inference")
+            
+            if not token:
+                raise RuntimeError("GITHUB_TOKEN no configurado")
+            
+            client = OpenAI(api_key=token, base_url=base_url)
+            
+            response = client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": """Eres un experto analista de conversaciones de WhatsApp. 
+                        Tu trabajo es identificar patrones interesantes, comportamientos anómalos y mensajes memorables 
+                        en conversaciones en español. Proporciona análisis detallados y estructurados."""
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2,
+                max_tokens=2000
+            )
+            return response.choices[0].message.content or ""
+        except Exception as e:
+            raise RuntimeError(f"Error al llamar al modelo LLM: {e}")
+    
+    def analyze_conversation_patterns(self, data_frame: ChatDataFrame) -> List[TrendSummary]:
+        """
+        Analiza patrones de conversación usando smolagents.
+        
+        Args:
+            data_frame: DataFrame con los mensajes del chat
+            
+        Returns:
+            Lista de tendencias identificadas
+        """
+        if data_frame.is_empty:
+            return []
+        
+        # Preparar datos para análisis
+        stats = data_frame.get_message_stats()
+        daily_activity = data_frame.get_daily_activity()
+        hourly_activity = data_frame.get_hourly_activity()
+        
+        # Preparar contexto para el agente
+        context = {
+            "total_messages": stats.get("total_messages", 0),
+            "unique_authors": stats.get("unique_authors", 0),
+            "date_range": {
+                "start": str(stats.get("date_range", {}).get("start", "")),
+                "end": str(stats.get("date_range", {}).get("end", ""))
+            },
+            "top_authors": dict(list(stats.get("authors", {}).items())[:5]),
+            "avg_message_length": stats.get("avg_message_length", 0),
+            "most_active_hour": stats.get("most_active_hour"),
+            "daily_activity_sample": daily_activity.head(10).to_dict() if not daily_activity.empty else {},
+            "hourly_patterns": hourly_activity.sum(axis=1).to_dict() if not hourly_activity.empty else {}
+        }
+        
+        # Prompt para análisis de patrones
+        prompt = f"""
+        Analiza los siguientes datos de una conversación de WhatsApp y identifica patrones interesantes:
+        
+        {json.dumps(context, indent=2, default=str)}
+        
+        Identifica hasta 5 tendencias o patrones más relevantes. Para cada patrón, proporciona:
+        1. Tipo de tendencia (ej: "actividad_temporal", "participación_desigual", "cambio_comportamiento")
+        2. Descripción clara en español
+        3. Puntuación de confianza (0.0-1.0)
+        4. Datos que lo respaldan
+        
+        Responde en formato JSON con una lista de objetos con las llaves:
+        - trend_type: string
+        - description: string  
+        - confidence_score: number
+        - supporting_data: object
+        - time_period: string (opcional)
+        - participants: array de strings (opcional)
+        """
+        
+        try:
+            response = self._call_llm(prompt)
+            
+            # Parsear respuesta JSON
+            if isinstance(response, str):
+                # Extraer JSON de la respuesta si está embebido en texto
+                json_match = re.search(r'\[.*\]', response, re.DOTALL)
+                if json_match:
+                    response = json_match.group()
+                    
+                trends_data = json.loads(response)
+            else:
+                trends_data = response
+            
+            # Convertir a objetos TrendSummary
+            trends = []
+            for trend_data in trends_data:
+                if isinstance(trend_data, dict):
+                    trend = TrendSummary(
+                        trend_type=trend_data.get("trend_type", "unknown"),
+                        description=trend_data.get("description", ""),
+                        confidence_score=float(trend_data.get("confidence_score", 0.5)),
+                        supporting_data=trend_data.get("supporting_data", {}),
+                        time_period=trend_data.get("time_period"),
+                        participants=trend_data.get("participants")
+                    )
+                    trends.append(trend)
+                    
+            return trends
+            
+        except Exception:
+            # Fallback a análisis básico sin LLM
+            return self._basic_pattern_analysis(data_frame)
+    
+    def detect_unusual_behavior(self, data_frame: ChatDataFrame) -> List[AnomalyDetection]:
+        """
+        Detecta comportamientos inusuales en la conversación.
+        
+        Args:
+            data_frame: DataFrame con los mensajes del chat
+            
+        Returns:
+            Lista de anomalías detectadas
+        """
+        if data_frame.is_empty:
+            return []
+        
+        anomalies = []
+        df = data_frame.df
+        
+        # Detectar picos de actividad inusuales
+        daily_counts = df.groupby(df['timestamp'].dt.date).size()
+        if len(daily_counts) > 1:
+            mean_daily = daily_counts.mean()
+            std_daily = daily_counts.std()
+            
+            for date, count in daily_counts.items():
+                if count > mean_daily + 2 * std_daily:  # 2 desviaciones estándar
+                    anomalies.append(AnomalyDetection(
+                        anomaly_type="pico_actividad",
+                        description=f"Actividad inusualmente alta el {date}: {count} mensajes (promedio: {mean_daily:.1f})",
+                        severity="medium",
+                        timestamp=datetime.combine(date, datetime.min.time()),
+                        metrics={"count": count, "average": mean_daily, "std_dev": std_daily}
+                    ))
+        
+        # Detectar mensajes excepcionalmente largos
+        msg_lengths = df['message'].str.len()
+        mean_length = msg_lengths.mean()
+        
+        long_messages = df[msg_lengths > mean_length + 3 * msg_lengths.std()]
+        for _, msg in long_messages.head(3).iterrows():  # Limitar a 3 mensajes más largos
+            anomalies.append(AnomalyDetection(
+                anomaly_type="mensaje_largo",
+                description=f"Mensaje excepcionalmente largo de {msg['author']}: {len(msg['message'])} caracteres",
+                severity="low",
+                timestamp=msg['timestamp'].to_pydatetime(),
+                participant=msg['author'],
+                metrics={"length": len(msg['message']), "average": mean_length}
+            ))
+        
+        # Mensajes muy tarde o muy temprano (madrugada)
+        late_night_msgs = df[(df['timestamp'].dt.hour >= 2) & (df['timestamp'].dt.hour <= 5)]
+        if not late_night_msgs.empty:
+            late_counts = late_night_msgs.groupby('author').size()
+            for author, count in late_counts.head(3).items():
+                if count >= 5:  # Al menos 5 mensajes en horario de madrugada
+                    anomalies.append(AnomalyDetection(
+                        anomaly_type="horario_inusual",
+                        description=f"{author} envió {count} mensajes en horario de madrugada (2-5 AM)",
+                        severity="low",
+                        participant=author,
+                        metrics={"count": count, "time_range": "2-5 AM"}
+                    ))
+        
+        return anomalies
+    
+    def find_quotable_messages(self, data_frame: ChatDataFrame, limit: int = 10) -> List[QuotableMessage]:
+        """
+        Encuentra mensajes memorables o citables usando smolagents.
+        
+        Args:
+            data_frame: DataFrame con los mensajes del chat
+            limit: Número máximo de mensajes a retornar
+            
+        Returns:
+            Lista de mensajes citables
+        """
+        if data_frame.is_empty:
+            return []
+        
+        df = data_frame.df
+        
+        # Seleccionar una muestra representativa de mensajes para análisis
+        # Priorizar mensajes más largos y únicos
+        sample_df = df[df['message'].str.len() > 20].copy()  # Mensajes con al menos 20 caracteres
+        
+        if sample_df.empty:
+            return []
+        
+        # Limitar a una muestra manejable para el LLM
+        if len(sample_df) > 100:
+            sample_df = sample_df.sample(100)
+        
+        # Preparar mensajes para análisis
+        messages_for_analysis = []
+        for _, row in sample_df.iterrows():
+            messages_for_analysis.append({
+                "sender": row['author'],
+                "message": row['message'],
+                "timestamp": str(row['timestamp'])
+            })
+        
+        prompt = f"""
+        Analiza estos mensajes de WhatsApp y selecciona los {limit} más memorables o citables.
+        Busca mensajes que sean:
+        - Divertidos o graciosos
+        - Profundos o reflexivos  
+        - Emotivos o conmovedores
+        - Únicos o creativos
+        - Especialmente expresivos o bien escritos
+        
+        Mensajes a analizar:
+        {json.dumps(messages_for_analysis, indent=2, ensure_ascii=False)}
+        
+        Para cada mensaje seleccionado, proporciona:
+        - message: texto del mensaje
+        - sender: autor del mensaje  
+        - timestamp: timestamp del mensaje
+        - quote_type: tipo ("funny", "insightful", "memorable", "emotional")
+        - relevance_score: puntuación 0.0-1.0
+        - context: breve explicación de por qué es memorable (opcional)
+        
+        Responde en formato JSON con una lista de objetos.
+        """
+        
+        try:
+            response = self._call_llm(prompt)
+            
+            # Parsear respuesta JSON
+            if isinstance(response, str):
+                json_match = re.search(r'\[.*\]', response, re.DOTALL)
+                if json_match:
+                    response = json_match.group()
+                quotes_data = json.loads(response)
+            else:
+                quotes_data = response
+                
+            # Convertir a objetos QuotableMessage
+            quotes = []
+            for quote_data in quotes_data:
+                if isinstance(quote_data, dict):
+                    timestamp_str = quote_data.get("timestamp", "")
+                    try:
+                        timestamp = pd.to_datetime(timestamp_str).to_pydatetime()
+                    except Exception:
+                        timestamp = datetime.now()
+                    
+                    quote = QuotableMessage(
+                        message=quote_data.get("message", ""),
+                        sender=quote_data.get("sender", ""),
+                        timestamp=timestamp,
+                        quote_type=quote_data.get("quote_type", "memorable"),
+                        relevance_score=float(quote_data.get("relevance_score", 0.5)),
+                        context=quote_data.get("context")
+                    )
+                    quotes.append(quote)
+                    
+            return quotes[:limit]
+            
+        except Exception:
+            # Fallback a selección básica sin LLM
+            return self._basic_quote_selection(data_frame, limit)
+    
+    def full_analysis(self, data_frame: ChatDataFrame) -> AnalysisResult:
+        """
+        Realiza un análisis completo de la conversación.
+        
+        Args:
+            data_frame: DataFrame con los mensajes del chat
+            
+        Returns:
+            Resultado completo del análisis
+        """
+        trends = self.analyze_conversation_patterns(data_frame)
+        anomalies = self.detect_unusual_behavior(data_frame)
+        quotes = self.find_quotable_messages(data_frame)
+        
+        # Metadatos del análisis
+        metadata = {
+            "analysis_timestamp": datetime.now().isoformat(),
+            "total_messages_analyzed": len(data_frame),
+            "analysis_version": "1.0",
+            "model_used": self.model_name
+        }
+        
+        return AnalysisResult(
+            trend_summaries=trends,
+            anomalies=anomalies,
+            quotable_messages=quotes,
+            analysis_metadata=metadata
+        )
+    
+    def _basic_pattern_analysis(self, data_frame: ChatDataFrame) -> List[TrendSummary]:
+        """Análisis básico de patrones sin LLM como fallback."""
+        trends = []
+        stats = data_frame.get_message_stats()
+        
+        # Tendencia de participación
+        authors = stats.get("authors", {})
+        if len(authors) > 1:
+            total_msgs = sum(authors.values())
+            max_participation = max(authors.values()) / total_msgs
+            
+            if max_participation > 0.7:
+                dominant_author = max(authors, key=authors.get)
+                trends.append(TrendSummary(
+                    trend_type="participacion_desigual",
+                    description=f"{dominant_author} domina la conversación con {max_participation:.1%} de los mensajes",
+                    confidence_score=0.8,
+                    supporting_data={"participation_rates": authors}
+                ))
+        
+        return trends
+    
+    def _basic_quote_selection(self, data_frame: ChatDataFrame, limit: int) -> List[QuotableMessage]:
+        """Selección básica de mensajes citables sin LLM como fallback."""
+        df = data_frame.df
+        
+        # Seleccionar mensajes más largos como proxy para contenido interesante
+        long_messages = df.nlargest(limit, df['message'].str.len())
+        
+        quotes = []
+        for _, row in long_messages.iterrows():
+            quote = QuotableMessage(
+                message=row['message'],
+                sender=row['author'],
+                timestamp=row['timestamp'].to_pydatetime(),
+                quote_type="memorable",
+                relevance_score=min(len(row['message']) / 200, 1.0),  # Score based on length
+                context="Mensaje seleccionado por longitud"
+            )
+            quotes.append(quote)
+            
+        return quotes
