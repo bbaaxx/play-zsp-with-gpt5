@@ -1,7 +1,6 @@
 """UI components for the Gradio interface."""
 
 import gradio as gr
-from typing import List, Optional
 
 
 def create_file_upload_component() -> gr.File:

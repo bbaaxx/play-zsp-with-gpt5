@@ -110,7 +110,7 @@ class AnalyticsEngine:
                 confidence_text = "🟢 Alta" if context.confidence > 0.7 else "🟡 Media" if context.confidence > 0.4 else "🔴 Baja"
                 output.append(f"\n{i}. **{context.category.replace('_', ' ').title()}** - {confidence_text} ({context.confidence:.1%})")
                 if context.evidence:
-                    output.append(f"   📋 Evidencia:")
+                    output.append("   📋 Evidencia:")
                     for evidence_item in context.evidence:
                         output.append(f"     • {evidence_item}")
         else:

@@ -161,7 +161,7 @@ class ContextDetector:
             time_score = self._check_time_patterns(df, config["time_patterns"])
             if time_score > 0:
                 score += time_score * 0.2
-                evidence.append(f"Patrón temporal coincide")
+                evidence.append("Patrón temporal coincide")
                 total_checks += 1
             
             # Aplicar multiplicador de peso para priorizar relaciones humanas
@@ -668,7 +668,7 @@ class AdaptiveAnalyzer:
             
             # Evidencia del contexto principal
             if main_context.evidence:
-                insights.append(f"📋 **Evidencia**:")
+                insights.append("📋 **Evidencia**:")
                 for evidence_item in main_context.evidence:
                     insights.append(f"  • {evidence_item}")
         
