@@ -28,15 +28,13 @@ def test_imports():
                 raise ImportError(f"{module_name} not found in rag module")
         
         print("✅ All analysis classes available")
-        return True
+        assert True
     except ImportError as e:
         print(f"❌ Import error: {e}")
-        return False
+        assert False, f"Import error: {e}"
     except Exception as e:
         print(f"❌ Instantiation error: {e}")
-        return False
-    
-    return True
+        assert False, f"Instantiation error: {e}"
 
 def test_basic_functionality():
     """Test basic functionality with sample data."""
@@ -69,11 +67,11 @@ def test_basic_functionality():
         anomalies = analyzer.detect_unusual_behavior(df)
         print(f"✅ Detected {len(anomalies)} anomalies")
         
-        return True
+        assert True
         
     except Exception as e:
         print(f"❌ Functionality test error: {e}")
-        return False
+        assert False, f"Functionality test error: {e}"
 
 def test_datetime_serialization_fix():
     """Test the specific fix for datetime serialization issue."""
@@ -128,13 +126,13 @@ def test_datetime_serialization_fix():
         else:
             print("✅ No daily activity data to test (small sample), but serialization function verified")
         
-        return True
+        assert True
         
     except Exception as e:
         print(f"❌ Datetime serialization test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        assert False, f"Datetime serialization test error: {e}"
 
 def main():
     """Run all tests."""

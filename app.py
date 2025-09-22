@@ -23,6 +23,9 @@ try:
 except Exception:
     OpenAI = None  # type: ignore
 
+# Set environment variable to disable tokenizers parallelism warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 # Monkey patch for a Gradio JSON schema bug where additionalProperties can be boolean
 try:
     from gradio_client import utils as _gc_utils  # type: ignore
@@ -296,6 +299,16 @@ def analyze_chat() -> str:
     """Realiza un análisis inteligente del chat usando smolagents."""
     if STATE.chat_dataframe is None or STATE.chat_dataframe.is_empty:
         return "No hay datos de chat cargados para analizar. Primero indexa un archivo."
+    
+    # Check if GitHub token is configured
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if not github_token:
+        return ("❌ **Error de configuración**\n\n"
+                "Para usar el análisis inteligente, necesitas configurar tu token de GitHub:\n\n"
+                "1. Crea un archivo `.env` en la raíz del proyecto\n"
+                "2. Agrega la línea: `GITHUB_TOKEN=tu_token_aquí`\n"
+                "3. Obtén tu token en: https://github.com/settings/tokens\n\n"
+                "El token necesita acceso a GitHub Models para funcionar.")
     
     try:
         # Obtener configuración del modelo LLM

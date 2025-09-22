@@ -277,7 +277,7 @@ class ChatAnalyzer:
         # Mensajes muy tarde o muy temprano (madrugada)
         late_night_msgs = df[(df['timestamp'].dt.hour >= 2) & (df['timestamp'].dt.hour <= 5)]
         if not late_night_msgs.empty:
-            late_counts = late_night_msgs.groupby('author').size()
+            late_counts = late_night_msgs.groupby('author', observed=True).size()
             for author, count in late_counts.head(3).items():
                 if count >= 5:  # Al menos 5 mensajes en horario de madrugada
                     anomalies.append(AnomalyDetection(

@@ -22,7 +22,7 @@ def test_serialization_fix():
     try:
         result = json.dumps(test_dict)
         print("ERROR: Should have failed!")
-        return False
+        assert False, "Should have failed with TypeError"
     except TypeError as e:
         print(f"✓ Expected error occurred: {e}")
     
@@ -54,10 +54,10 @@ def test_serialization_fix():
         result = json.dumps(fixed_dict, indent=2)
         print("✓ Fixed version works successfully!")
         print(f"Result: {result}")
-        return True
+        assert True
     except Exception as e:
         print(f"✗ Fix failed: {e}")
-        return False
+        assert False, f"Fix failed: {e}"
 
 def test_with_actual_function():
     """Test with the actual function from smart_analysis."""
@@ -114,13 +114,13 @@ def test_with_actual_function():
                 print(f"✓ Successfully serialized column '{col_name}' with {len(serialized_col)} date entries")
         
         print("✓ All serialization tests passed - fix is working!")
-        return True
+        assert True
         
     except Exception as e:
         print(f"✗ Integration test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        assert False, f"Integration test failed: {e}"
 
 if __name__ == "__main__":
     print("Testing datetime serialization fix...")
