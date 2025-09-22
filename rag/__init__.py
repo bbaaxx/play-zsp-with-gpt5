@@ -7,6 +7,12 @@ from .smart_analysis import (
     QuotableMessage,
     AnalysisResult,
 )
+from .adaptive_analysis import (
+    AdaptiveAnalyzer,
+    ContextCategory,
+    SpecializedAgent,
+    AdaptiveAnalysisResult,
+)
 
 __all__ = [
     "EmbeddingProvider",
@@ -24,5 +30,9 @@ __all__ = [
     "AnomalyDetection", 
     "QuotableMessage",
     "AnalysisResult",
+    "AdaptiveAnalyzer",
+    "ContextCategory",
+    "SpecializedAgent",
+    "AdaptiveAnalysisResult",
 ]
 

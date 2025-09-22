@@ -19,6 +19,8 @@ from rag import (
     ChatDataFrame,
     ChatAnalyzer,
     AnalysisResult,
+    AdaptiveAnalyzer,
+    AdaptiveAnalysisResult,
 )
 
 try:
@@ -72,6 +74,7 @@ class AppState:
         self.loaded_text: Optional[str] = None
         self.chat_dataframe: Optional[ChatDataFrame] = None
         self.last_analysis: Optional[AnalysisResult] = None
+        self.last_adaptive_analysis: Optional[AdaptiveAnalysisResult] = None
 
 
 STATE = AppState()
@@ -166,6 +169,7 @@ def clear_state():
     STATE.loaded_text = None
     STATE.chat_dataframe = None
     STATE.last_analysis = None
+    STATE.last_adaptive_analysis = None
     return [], "Estado limpiado."
 
 
@@ -390,19 +394,135 @@ def analyze_chat(progress=gr.Progress()) -> str:
         return f"Error durante el análisis: {e}\n\nVerifica que tengas configurado correctamente el acceso a modelos LLM (variables de entorno GITHUB_TOKEN, etc.)"
 
 
+def analyze_chat_adaptive(progress=gr.Progress()) -> str:
+    """Realiza análisis adaptativo de dos etapas."""
+    progress(0, desc="Iniciando análisis adaptativo...")
+    
+    if STATE.chat_dataframe is None or STATE.chat_dataframe.is_empty:
+        return "No hay datos de chat cargados para analizar. Primero indexa un archivo."
+    
+    progress(0.1, desc="Verificando configuración...")
+    
+    # Check if GitHub token is configured
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if not github_token:
+        return ("❌ **Error de configuración**\n\n"
+                "Para usar el análisis adaptativo, necesitas configurar tu token de GitHub:\n\n"
+                "1. Crea un archivo `.env` en la raíz del proyecto\n"
+                "2. Agrega la línea: `GITHUB_TOKEN=tu_token_aquí`\n"
+                "3. Obtén tu token en: https://github.com/settings/tokens\n\n"
+                "El token necesita acceso a GitHub Models para funcionar.")
+    
+    try:
+        progress(0.2, desc="Configurando analizador adaptativo...")
+        
+        # Crear analizador adaptativo
+        adaptive_analyzer = AdaptiveAnalyzer()
+        
+        progress(0.3, desc="Etapa 1: Ejecutando análisis básico...")
+        progress(0.5, desc="Etapa 2: Detectando contextos de conversación...")
+        progress(0.7, desc="Etapa 3: Creando agentes especializados...")
+        progress(0.85, desc="Etapa 4: Ejecutando análisis especializados...")
+        
+        # Realizar análisis adaptativo completo
+        result = adaptive_analyzer.analyze(STATE.chat_dataframe)
+        STATE.last_adaptive_analysis = result
+        
+        progress(0.95, desc="Formateando resultados...")
+        
+        # Formatear resultados
+        output = ["=== ANÁLISIS ADAPTATIVO DE DOS ETAPAS ===\n"]
+        
+        # Contextos detectados
+        output.append("🎯 **CONTEXTOS DETECTADOS:**")
+        if result.detected_contexts:
+            for i, context in enumerate(result.detected_contexts, 1):
+                confidence_text = "🟢 Alta" if context.confidence > 0.7 else "🟡 Media" if context.confidence > 0.4 else "🔴 Baja"
+                output.append(f"\n{i}. **{context.category.replace('_', ' ').title()}** - {confidence_text} ({context.confidence:.1%})")
+                if context.evidence:
+                    output.append(f"   📋 Evidencia: {'; '.join(context.evidence[:2])}")
+        else:
+            output.append("No se detectaron contextos específicos.")
+        
+        # Análisis especializados
+        output.append("\n🔬 **ANÁLISIS ESPECIALIZADOS:**")
+        if result.specialized_analyses:
+            for context_type, analyses in result.specialized_analyses.items():
+                context_name = context_type.replace('_', ' ').title()
+                output.append(f"\n📊 **{context_name}:**")
+                
+                if isinstance(analyses, dict) and "error" not in analyses:
+                    for focus_area, analysis in analyses.items():
+                        if analysis and isinstance(analysis, str):
+                            area_name = focus_area.replace('_', ' ').title()
+                            # Tomar primera línea significativa del análisis
+                            lines = [line.strip() for line in analysis.split('\n') if line.strip()]
+                            preview = lines[0] if lines else analysis[:100]
+                            output.append(f"   • **{area_name}**: {preview[:200]}...")
+                elif "error" in analyses:
+                    output.append(f"   ⚠️ Error en análisis: {analyses['error']}")
+        else:
+            output.append("No se generaron análisis especializados.")
+        
+        # Insights adaptativos
+        output.append("\n💡 **INSIGHTS ADAPTATIVOS:**")
+        if result.adaptive_insights:
+            for insight in result.adaptive_insights:
+                output.append(f"\n{insight}")
+        else:
+            output.append("No se generaron insights adaptativos.")
+        
+        # Análisis básico (resumen)
+        basic = result.basic_analysis
+        output.append("\n📈 **RESUMEN ANÁLISIS BÁSICO:**")
+        output.append(f"• {len(basic.trend_summaries)} tendencias identificadas")
+        output.append(f"• {len(basic.anomalies)} anomalías detectadas")
+        output.append(f"• {len(basic.quotable_messages)} mensajes memorables")
+        
+        # Metadatos
+        output.append("\n📊 **METADATOS:**")
+        output.append(f"- Contextos detectados: {result.analysis_metadata.get('total_contexts_detected', 0)}")
+        output.append(f"- Agentes especializados: {result.analysis_metadata.get('specialized_agents_used', 0)}")
+        output.append(f"- Versión análisis: {result.analysis_metadata.get('analysis_version', 'N/A')}")
+        output.append(f"- Realizado: {result.analysis_metadata.get('analysis_timestamp', 'N/A')[:19]}")
+        
+        progress(1.0, desc="✅ Análisis adaptativo completado")
+        
+        return "\n".join(output)
+        
+    except Exception as e:
+        logger.exception("Error durante el análisis adaptativo")
+        return f"Error durante el análisis adaptativo: {e}\n\nVerifica que tengas configurado correctamente el acceso a modelos LLM."
+
+
 def get_analysis_summary() -> str:
     """Obtiene un resumen rápido del último análisis."""
-    if STATE.last_analysis is None:
+    if STATE.last_analysis is None and STATE.last_adaptive_analysis is None:
         return "No hay análisis previo disponible."
     
-    result = STATE.last_analysis
-    summary = [
-        "📊 **Último Análisis:**",
-        f"• {len(result.trend_summaries)} tendencias identificadas",
-        f"• {len(result.anomalies)} anomalías detectadas", 
-        f"• {len(result.quotable_messages)} mensajes memorables",
-        f"• Realizado: {result.analysis_metadata.get('analysis_timestamp', 'N/A')[:19]}"
-    ]
+    summary = ["📊 **Últimos Análisis:**"]
+    
+    # Resumen análisis básico
+    if STATE.last_analysis is not None:
+        result = STATE.last_analysis
+        summary.extend([
+            "\n🔍 **Análisis Básico:**",
+            f"• {len(result.trend_summaries)} tendencias identificadas",
+            f"• {len(result.anomalies)} anomalías detectadas", 
+            f"• {len(result.quotable_messages)} mensajes memorables",
+            f"• Realizado: {result.analysis_metadata.get('analysis_timestamp', 'N/A')[:19]}"
+        ])
+    
+    # Resumen análisis adaptativo
+    if STATE.last_adaptive_analysis is not None:
+        result = STATE.last_adaptive_analysis
+        summary.extend([
+            "\n🎯 **Análisis Adaptativo:**",
+            f"• {len(result.detected_contexts)} contextos detectados",
+            f"• {result.analysis_metadata.get('specialized_agents_used', 0)} agentes especializados",
+            f"• {len(result.adaptive_insights)} insights adaptativos",
+            f"• Realizado: {result.analysis_metadata.get('analysis_timestamp', 'N/A')[:19]}"
+        ])
     
     return "\n".join(summary)
 
@@ -433,6 +553,7 @@ def build_ui() -> gr.Blocks:
             status_btn = gr.Button("Estado LLM")
         with gr.Row():
             analyze_btn = gr.Button("🔍 Analizar Conversación", variant="secondary")
+            adaptive_btn = gr.Button("🎯 Análisis Adaptativo", variant="primary")
             summary_btn = gr.Button("📊 Resumen Análisis", size="sm")
         status = gr.Textbox(label="Estado", interactive=False)
 
@@ -443,13 +564,22 @@ def build_ui() -> gr.Blocks:
                 user_input = gr.Textbox(label="Tu pregunta (español)")
                 send_btn = gr.Button("Enviar")
             
-            with gr.Tab("📈 Análisis Inteligente"):
+            with gr.Tab("📈 Análisis Básico"):
                 analysis_output = gr.Textbox(
-                    label="Resultados del Análisis", 
+                    label="Resultados del Análisis Básico", 
                     lines=20, 
                     max_lines=30,
                     interactive=False,
-                    placeholder="Haz clic en 'Analizar Conversación' para ver insights inteligentes sobre el chat..."
+                    placeholder="Haz clic en 'Analizar Conversación' para ver insights básicos sobre el chat..."
+                )
+            
+            with gr.Tab("🎯 Análisis Adaptativo"):
+                adaptive_analysis_output = gr.Textbox(
+                    label="Resultados del Análisis Adaptativo", 
+                    lines=25, 
+                    max_lines=40,
+                    interactive=False,
+                    placeholder="Haz clic en 'Análisis Adaptativo' para un análisis de dos etapas con agentes especializados..."
                 )
 
         def do_index(file):
@@ -463,6 +593,12 @@ def build_ui() -> gr.Blocks:
             fn=analyze_chat,
             inputs=[],
             outputs=[analysis_output],
+            show_progress=True
+        )
+        adaptive_btn.click(
+            fn=analyze_chat_adaptive,
+            inputs=[],
+            outputs=[adaptive_analysis_output],
             show_progress=True
         )
         summary_btn.click(fn=get_analysis_summary, inputs=[], outputs=[status])
