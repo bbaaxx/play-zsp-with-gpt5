@@ -48,6 +48,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+
+logger = logging.getLogger(__name__)
 logger = logging.getLogger("app")
 
 
@@ -221,10 +223,12 @@ def get_analysis_summary() -> str:
     return STATE.analytics_engine.get_analysis_summary()
 
 
-def get_available_models(provider: str) -> List[str]:
-    """Get available models for a given provider."""
-    if provider == "github_models":
-        # These are the commonly available models in GitHub Models
+def _fetch_github_models() -> List[str]:
+    """Fetch available models from GitHub Models API."""
+    try:
+        import httpx
+    except ImportError:
+        logger.error("httpx not available for fetching GitHub models")
         return [
             "openai/gpt-4o",
             "openai/gpt-4o-mini", 
@@ -236,20 +240,222 @@ def get_available_models(provider: str) -> List[str]:
             "mistralai/Mistral-7B-Instruct-v0.1",
             "mistralai/Mistral-Nemo"
         ]
+    
+    token = os.environ.get("GITHUB_TOKEN")
+    base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.github.ai/inference")
+    
+    if not token:
+        # Return hardcoded fallback list if no token
+        return [
+            "openai/gpt-4o",
+            "openai/gpt-4o-mini", 
+            "openai/gpt-3.5-turbo",
+            "microsoft/Phi-3.5-mini-instruct",
+            "microsoft/Phi-3.5-MoE-instruct",
+            "meta-llama/Llama-3.2-3B-Instruct",
+            "meta-llama/Llama-3.2-1B-Instruct",
+            "mistralai/Mistral-7B-Instruct-v0.1",
+            "mistralai/Mistral-Nemo"
+        ]
+    
+    try:
+        url = f"{base_url}/models"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+        
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            
+            models = []
+            
+            # Handle different API response formats
+            if isinstance(data, dict):
+                if "data" in data:
+                    # Response has data wrapper
+                    model_list = data["data"]
+                elif "models" in data:
+                    # Response has models wrapper
+                    model_list = data["models"]
+                else:
+                    # Direct model list in dict
+                    model_list = data.get("object", []) if data.get("object") == "list" else []
+                    if not model_list and "id" in data:
+                        # Single model response
+                        model_list = [data]
+            elif isinstance(data, list):
+                # Direct model list
+                model_list = data
+            else:
+                model_list = []
+            
+            for model in model_list:
+                if isinstance(model, dict):
+                    # Extract model ID/name from different possible fields
+                    model_id = model.get("id") or model.get("name") or model.get("model")
+                    if model_id:
+                        # Filter for chat/completion models (exclude embedding-only models)
+                        model_type = model.get("type", "").lower()
+                        object_type = model.get("object", "").lower()
+                        
+                        # Include if it's a chat/completion model or type is not specified
+                        if (not model_type or 
+                            "chat" in model_type or 
+                            "completion" in model_type or 
+                            "text" in model_type or
+                            object_type == "model"):
+                            
+                            # Skip embedding-only models
+                            if ("embedding" not in model_id.lower() or 
+                                "chat" in model_type or 
+                                "completion" in model_type):
+                                models.append(model_id)
+                elif isinstance(model, str):
+                    # Direct string model name
+                    models.append(model)
+            
+            # Sort models and remove duplicates
+            models = sorted(list(set(models)))
+            
+            # If no models found, return fallback
+            if not models:
+                return [
+                    "openai/gpt-4o",
+                    "openai/gpt-4o-mini", 
+                    "openai/gpt-3.5-turbo",
+                    "microsoft/Phi-3.5-mini-instruct",
+                    "microsoft/Phi-3.5-MoE-instruct",
+                    "meta-llama/Llama-3.2-3B-Instruct",
+                    "meta-llama/Llama-3.2-1B-Instruct",
+                    "mistralai/Mistral-7B-Instruct-v0.1",
+                    "mistralai/Mistral-Nemo"
+                ]
+            
+            return models
+            
+    except Exception as e:
+        logger.error(f"Error fetching GitHub Models: {e}")
+        # Return hardcoded fallback list on error
+        return [
+            "openai/gpt-4o",
+            "openai/gpt-4o-mini", 
+            "openai/gpt-3.5-turbo",
+            "microsoft/Phi-3.5-mini-instruct",
+            "microsoft/Phi-3.5-MoE-instruct",
+            "meta-llama/Llama-3.2-3B-Instruct",
+            "meta-llama/Llama-3.2-1B-Instruct",
+            "mistralai/Mistral-7B-Instruct-v0.1",
+            "mistralai/Mistral-Nemo"
+        ]
+
+
+def get_available_models(provider: str) -> List[str]:
+    """Get available models for a given provider."""
+    if provider == "github_models":
+        return _fetch_github_models()
     elif provider == "lm_studio":
         # For LM Studio, we can't dynamically query models, so provide default
         return ["local-chat-model", "custom-model"]
     return []
 
 
-def get_available_embedding_models(provider: str) -> List[str]:
-    """Get available embedding models for a given provider."""
-    if provider == "github_models":
+def _fetch_github_embedding_models() -> List[str]:
+    """Fetch available embedding models from GitHub Models API."""
+    try:
+        import httpx
+    except ImportError:
+        logger.error("httpx not available for fetching GitHub embedding models")
         return [
             "openai/text-embedding-3-small",
             "openai/text-embedding-3-large", 
             "openai/text-embedding-ada-002"
         ]
+    
+    token = os.environ.get("GITHUB_TOKEN")
+    base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.github.ai/inference")
+    
+    if not token:
+        # Return hardcoded fallback list if no token
+        return [
+            "openai/text-embedding-3-small",
+            "openai/text-embedding-3-large", 
+            "openai/text-embedding-ada-002"
+        ]
+    
+    try:
+        url = f"{base_url}/models"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+        
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            
+            models = []
+            
+            # Handle different API response formats
+            if isinstance(data, dict):
+                if "data" in data:
+                    model_list = data["data"]
+                elif "models" in data:
+                    model_list = data["models"]
+                else:
+                    model_list = data.get("object", []) if data.get("object") == "list" else []
+                    if not model_list and "id" in data:
+                        model_list = [data]
+            elif isinstance(data, list):
+                model_list = data
+            else:
+                model_list = []
+            
+            for model in model_list:
+                if isinstance(model, dict):
+                    model_id = model.get("id") or model.get("name") or model.get("model")
+                    if model_id:
+                        # Filter for embedding models
+                        model_type = model.get("type", "").lower()
+                        
+                        # Include if it's specifically an embedding model
+                        if ("embedding" in model_id.lower() or 
+                            "embedding" in model_type):
+                            models.append(model_id)
+                elif isinstance(model, str) and "embedding" in model.lower():
+                    models.append(model)
+            
+            # Sort models and remove duplicates
+            models = sorted(list(set(models)))
+            
+            # If no embedding models found, return fallback
+            if not models:
+                return [
+                    "openai/text-embedding-3-small",
+                    "openai/text-embedding-3-large", 
+                    "openai/text-embedding-ada-002"
+                ]
+            
+            return models
+            
+    except Exception as e:
+        logger.error(f"Error fetching GitHub embedding models: {e}")
+        return [
+            "openai/text-embedding-3-small",
+            "openai/text-embedding-3-large", 
+            "openai/text-embedding-ada-002"
+        ]
+
+
+def get_available_embedding_models(provider: str) -> List[str]:
+    """Get available embedding models for a given provider."""
+    if provider == "github_models":
+        return _fetch_github_embedding_models()
     elif provider == "lm_studio":
         return ["local-embedding-model", "custom-embedding-model"]
     elif provider == "local":
@@ -273,6 +479,26 @@ def update_models_dropdown(provider: str) -> gr.Dropdown:
 
 def update_embedding_models_dropdown(provider: str) -> gr.Dropdown:
     """Update embedding models dropdown when provider changes."""
+    models = get_available_embedding_models(provider)
+    return gr.Dropdown(
+        choices=models,
+        value=models[0] if models else "",
+        label="Modelo de Embeddings"
+    )
+
+
+def refresh_models_dropdown(provider: str) -> gr.Dropdown:
+    """Refresh models dropdown to fetch latest models from API."""
+    models = get_available_models(provider)
+    return gr.Dropdown(
+        choices=models,
+        value=models[0] if models else "",
+        label="Modelo"
+    )
+
+
+def refresh_embedding_models_dropdown(provider: str) -> gr.Dropdown:
+    """Refresh embedding models dropdown to fetch latest models from API.""" 
     models = get_available_embedding_models(provider)
     return gr.Dropdown(
         choices=models,
@@ -307,6 +533,7 @@ def build_ui() -> gr.Blocks:
                         value="intfloat/multilingual-e5-small",
                         label="Modelo de Embeddings"
                     )
+                    embed_refresh_btn = gr.Button("🔄", size="sm", variant="secondary")
                 
                 # Analysis configuration  
                 with gr.Column():
@@ -321,6 +548,7 @@ def build_ui() -> gr.Blocks:
                         value="openai/gpt-4o",
                         label="Modelo para Análisis"
                     )
+                    analysis_refresh_btn = gr.Button("🔄", size="sm", variant="secondary")
                 
                 # Chat configuration
                 with gr.Column():
@@ -335,6 +563,7 @@ def build_ui() -> gr.Blocks:
                         value="openai/gpt-4o",
                         label="Modelo para Chat"
                     )
+                    chat_refresh_btn = gr.Button("🔄", size="sm", variant="secondary")
 
         with gr.Row():
             topk = gr.Slider(1, 10, value=5, step=1, label="Top-k")
@@ -445,6 +674,25 @@ def build_ui() -> gr.Blocks:
         
         chat_provider.change(
             fn=update_models_dropdown,
+            inputs=[chat_provider],
+            outputs=[chat_model]
+        )
+        
+        # Refresh button handlers
+        embed_refresh_btn.click(
+            fn=refresh_embedding_models_dropdown,
+            inputs=[embed_provider],
+            outputs=[embed_model]
+        )
+        
+        analysis_refresh_btn.click(
+            fn=refresh_models_dropdown,
+            inputs=[analysis_provider],
+            outputs=[analysis_model]
+        )
+        
+        chat_refresh_btn.click(
+            fn=refresh_models_dropdown,
             inputs=[chat_provider],
             outputs=[chat_model]
         )
