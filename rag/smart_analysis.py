@@ -86,9 +86,12 @@ class ChatAnalyzer:
         messages = [
             {
                 "role": "system",
-                "content": """Eres un experto analista de conversaciones de WhatsApp.
-                Tu trabajo es identificar patrones interesantes, comportamientos anómalos y mensajes memorables
-                en conversaciones en español. Proporciona análisis detallados y estructurados."""
+                "content": """Eres un experto analista de RELACIONES HUMANAS y comunicación interpersonal.
+                Tu enfoque PRINCIPAL es analizar dinámicas relacionales, vínculos emocionales, conexiones afectivas
+                y patrones de comunicación humana que revelan la calidad de las relaciones entre personas.
+                PRIORIZA SIEMPRE aspectos de amistad, amor, familia, apoyo emocional y conexión humana
+                por encima de temas de trabajo, tareas o contenido transaccional. Busca la dimensión emocional
+                y relacional en cada interacción."""
             },
             {"role": "user", "content": prompt}
         ]
@@ -166,13 +169,27 @@ class ChatAnalyzer:
         
         # Prompt para análisis de patrones
         prompt = f"""
-        Analiza los siguientes datos de una conversación de WhatsApp y identifica patrones interesantes:
+        Analiza los siguientes datos de una conversación de WhatsApp ENFOCÁNDOTE EN RELACIONES HUMANAS Y DINÁMICAS INTERPERSONALES:
         
         {json.dumps(context, indent=2, default=str)}
         
-        Identifica hasta 5 tendencias o patrones más relevantes. Para cada patrón, proporciona:
-        1. Tipo de tendencia (ej: "actividad_temporal", "participación_desigual", "cambio_comportamiento")
-        2. Descripción clara en español
+        PRIORIZA identificar patrones que revelen:
+        - Vínculos afectivos y emocionales entre participantes
+        - Patrones de cuidado mutuo y apoyo emocional
+        - Dinámicas de intimidad, confianza y cercanía
+        - Evolución de relaciones (amistad, romance, familia)
+        - Expresiones de cariño, preocupación o afecto
+        - Momentos de vulnerabilidad compartida
+        - Rituales de comunicación únicos entre las personas
+        
+        MINIMIZA o evita patrones relacionados con:
+        - Gestión de tareas o proyectos
+        - Coordinación puramente logística
+        - Contenido transaccional sin dimensión emocional
+        
+        Identifica hasta 5 tendencias RELACIONALES más relevantes. Para cada patrón, proporciona:
+        1. Tipo de tendencia (ej: "vínculo_afectivo_creciente", "apoyo_emocional_constante", "intimidad_comunicativa")
+        2. Descripción clara en español enfocada en la dimensión humana
         3. Puntuación de confianza (0.0-1.0)
         4. Datos que lo respaldan
         
@@ -319,13 +336,22 @@ class ChatAnalyzer:
             })
         
         prompt = f"""
-        Analiza estos mensajes de WhatsApp y selecciona los {limit} más memorables o citables.
+        Analiza estos mensajes de WhatsApp PRIORIZANDO aquellos que revelan CONEXIÓN HUMANA Y DIMENSIÓN RELACIONAL.
+        
         Busca mensajes que sean:
-        - Divertidos o graciosos
-        - Profundos o reflexivos  
-        - Emotivos o conmovedores
-        - Únicos o creativos
-        - Especialmente expresivos o bien escritos
+        - Expresiones auténticas de afecto, cariño o amor
+        - Momentos de vulnerabilidad emocional compartida
+        - Apoyo genuino en momentos difíciles
+        - Declaraciones de aprecio o gratitud personal
+        - Expresiones de preocupación sincera por el otro
+        - Momentos íntimos o de complicidad especial
+        - Manifestaciones de confianza profunda
+        - Comunicación que fortalece vínculos relacionales
+        
+        DEPRIORITIZA mensajes que sean:
+        - Puramente informativos o transaccionales
+        - Relacionados solo con tareas o logística
+        - Sin carga emocional o relacional significativa
         
         Mensajes a analizar:
         {json.dumps(messages_for_analysis, indent=2, ensure_ascii=False)}
@@ -334,9 +360,9 @@ class ChatAnalyzer:
         - message: texto del mensaje
         - sender: autor del mensaje  
         - timestamp: timestamp del mensaje
-        - quote_type: tipo ("funny", "insightful", "memorable", "emotional")
-        - relevance_score: puntuación 0.0-1.0
-        - context: breve explicación de por qué es memorable (opcional)
+        - quote_type: tipo ("affectionate", "supportive", "intimate", "caring", "emotionally_significant")
+        - relevance_score: puntuación 0.0-1.0 (prioriza alto score para contenido relacional)
+        - context: explicación de por qué es significativo para la relación humana
         
         Responde en formato JSON con una lista de objetos.
         """

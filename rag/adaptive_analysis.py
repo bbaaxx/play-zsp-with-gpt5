@@ -48,42 +48,49 @@ class ContextDetector:
     def __init__(self, llm_manager: Optional[LLMManager] = None):
         self.llm_manager = llm_manager or LLMManager()
         
-        # Patrones predefinidos para detección de contexto
+        # Patrones predefinidos para detección de contexto - PRIORIZANDO RELACIONES Y COMUNICACIÓN HUMANA
         self.context_patterns = {
             "friends_casual": {
-                "keywords": ["jaja", "lol", "xd", "amigo", "bro", "man", "vamos", "fiesta", "salir"],
-                "patterns": [r"ja+", r"jeje", r"meme", r"gif"],
+                "keywords": ["jaja", "lol", "xd", "amigo", "bro", "man", "vamos", "fiesta", "salir", "compadre", "loco", "broma", "risa", "diversión", "juntarnos", "risas", "genial", "cool", "bacán"],
+                "patterns": [r"ja+", r"jeje", r"meme", r"gif", r"😂", r"🤣", r"😄", r"👍", r"😎"],
                 "time_patterns": ["evening", "weekend"],
+                "weight_multiplier": 2.0,  # Alta prioridad para amistad
             },
             "romantic_couple": {
-                "keywords": ["amor", "mi amor", "cariño", "bebé", "corazón", "te amo", "extraño", "beso"],
-                "patterns": [r"❤️", r"😘", r"💕", r"te.*amo", r"mi.*amor"],
+                "keywords": ["amor", "mi amor", "cariño", "bebé", "corazón", "te amo", "extraño", "beso", "hermosa", "hermoso", "cariño", "mi cielo", "mi vida", "mi todo", "dulce", "querido", "mi rey", "mi reina"],
+                "patterns": [r"❤️", r"😘", r"💕", r"te.*amo", r"mi.*amor", r"💖", r"💝", r"🥰", r"😍"],
                 "time_patterns": ["late_night", "early_morning"],
+                "weight_multiplier": 2.5,  # Máxima prioridad para relaciones románticas
             },
             "family": {
-                "keywords": ["papá", "mamá", "hijo", "hija", "hermano", "hermana", "familia", "casa", "cena"],
-                "patterns": [r"papá|papa", r"mamá|mama", r"mi.*hijo", r"mi.*hija"],
+                "keywords": ["papá", "mamá", "hijo", "hija", "hermano", "hermana", "familia", "casa", "cena", "abuela", "abuelo", "tío", "tía", "primo", "prima", "nieto", "nieta", "sobrino", "sobrina"],
+                "patterns": [r"papá|papa", r"mamá|mama", r"mi.*hijo", r"mi.*hija", r"mi.*familia", r"en.*casa"],
                 "time_patterns": ["morning", "evening"],
+                "weight_multiplier": 2.2,  # Alta prioridad para familia
+            },
+            "support_emotional": {
+                "keywords": ["triste", "mal", "problema", "ayuda", "apoyo", "entiendo", "fuerza", "ánimo", "preocupado", "feliz", "contento", "emocionado", "nervioso", "ansioso", "estresado", "cansado", "alegre"],
+                "patterns": [r"está.*mal", r"me.*siento", r"problema", r"ayuda", r"cómo.*estás", r"qué.*tal", r"todo.*bien"],
+                "time_patterns": ["any"],
+                "weight_multiplier": 2.0,  # Alta prioridad para apoyo emocional
+            },
+            "planning_organizing": {
+                "keywords": ["plan", "cuando", "donde", "hora", "lugar", "quedamos", "vamos", "organizamos", "evento", "cumpleaños", "celebración", "reunimos", "juntamos"],
+                "patterns": [r"qué.*hora", r"dónde", r"cuándo", r"plan", r"nos.*vemos", r"quedamos"],
+                "time_patterns": ["any"],
+                "weight_multiplier": 1.8,  # Prioridad media-alta para planificación social
+            },
+            "gaming": {
+                "keywords": ["juego", "game", "partida", "nivel", "win", "gg", "noob", "lag", "fps", "jugamos", "conectar", "online"],
+                "patterns": [r"gg", r"ez", r"1v1", r"rank", r"play", r"jugamos"],
+                "time_patterns": ["evening", "night"],
+                "weight_multiplier": 1.3,  # Prioridad media para gaming (aspectos sociales)
             },
             "work_professional": {
                 "keywords": ["trabajo", "reunión", "proyecto", "cliente", "jefe", "oficina", "deadline", "reporte"],
                 "patterns": [r"reunión", r"proyecto", r"informe", r"excel", r"email"],
                 "time_patterns": ["business_hours"],
-            },
-            "gaming": {
-                "keywords": ["juego", "game", "partida", "nivel", "win", "gg", "noob", "lag", "fps"],
-                "patterns": [r"gg", r"ez", r"1v1", r"rank", r"play"],
-                "time_patterns": ["evening", "night"],
-            },
-            "support_emotional": {
-                "keywords": ["triste", "mal", "problema", "ayuda", "apoyo", "entiendo", "fuerza", "ánimo"],
-                "patterns": [r"está.*mal", r"me.*siento", r"problema", r"ayuda"],
-                "time_patterns": ["any"],
-            },
-            "planning_organizing": {
-                "keywords": ["plan", "cuando", "donde", "hora", "lugar", "quedamos", "vamos", "organizamos"],
-                "patterns": [r"qué.*hora", r"dónde", r"cuándo", r"plan"],
-                "time_patterns": ["any"],
+                "weight_multiplier": 0.3,  # Baja prioridad para trabajo - SE REDUCE SIGNIFICATIVAMENTE
             },
         }
     
@@ -157,17 +164,24 @@ class ContextDetector:
                 evidence.append(f"Patrón temporal coincide")
                 total_checks += 1
             
-            # Calcular confianza final
+            # Aplicar multiplicador de peso para priorizar relaciones humanas
+            weight_multiplier = config.get("weight_multiplier", 1.0)
+            score *= weight_multiplier
+            
+            # Calcular confianza final - umbral más bajo para contextos relacionales
             if total_checks > 0:
                 confidence = score / max(total_checks * 0.5, 1.0)
                 confidence = min(confidence, 1.0)
                 
-                if confidence > 0.1:  # Umbral mínimo
+                # Umbral dinámico: más bajo para contextos relacionales prioritarios
+                min_threshold = 0.05 if weight_multiplier > 1.5 else 0.1
+                
+                if confidence > min_threshold:
                     contexts.append(ContextCategory(
                         category=context_type,
                         confidence=confidence,
                         evidence=evidence,
-                        characteristics={"pattern_based": True}
+                        characteristics={"pattern_based": True, "priority_weighted": True}
                     ))
         
         return contexts
@@ -206,28 +220,40 @@ class ContextDetector:
             }
             
             prompt = f"""
-            Analiza esta conversación de WhatsApp y determina los tipos de relación/contexto más probables.
+            Analiza esta conversación de WhatsApp PRIORIZANDO aspectos relacionales y de comunicación humana por encima de temas laborales o profesionales.
             
             Información de la conversación:
             {json.dumps(context_info, indent=2, default=str)}
             
-            Evalúa la probabilidad de que esta conversación pertenezca a cada una de estas categorías:
+            Evalúa la probabilidad enfocándote ESPECIALMENTE en:
+            - Vínculos emocionales y afectivos entre personas
+            - Dinámicas de amistad, romance y familia
+            - Expresiones de sentimientos y apoyo mutuo
+            - Interacciones sociales y personales
+            - Comunicación íntima y cercana
             
-            1. **friends_casual**: Amigos conversando de forma casual/divertida
-            2. **romantic_couple**: Pareja romántica/matrimonio
-            3. **family**: Familia (padres-hijos, hermanos, etc.)
-            4. **work_professional**: Contexto laboral/profesional
-            5. **gaming**: Discusiones sobre videojuegos
-            6. **support_emotional**: Apoyo emocional/conversaciones profundas
-            7. **planning_organizing**: Planificación de eventos/actividades
+            DEPRIORITIZA o minimiza contextos de:
+            - Trabajo, oficina, proyectos profesionales
+            - Tareas, deadlines, reuniones de trabajo
+            - Comunicación puramente transaccional
             
-            Para cada categoría que consideres relevante (confianza > 0.2), responde en formato JSON:
+            Categorías a evaluar (ordenadas por PRIORIDAD RELACIONAL):
+            
+            1. **romantic_couple**: Pareja romántica/matrimonio (MÁXIMA PRIORIDAD - busca expresiones de amor, cariño, intimidad)
+            2. **family**: Familia (ALTA PRIORIDAD - busca dinámicas familiares, apoyo, cuidado mutuo)
+            3. **friends_casual**: Amigos conversando (ALTA PRIORIDAD - busca humor, camaradería, planes sociales)
+            4. **support_emotional**: Apoyo emocional (ALTA PRIORIDAD - busca expresiones de sentimientos, consuelo)
+            5. **planning_organizing**: Planificación social (PRIORIDAD MEDIA - enfócate en eventos sociales/personales)
+            6. **gaming**: Videojuegos (PRIORIDAD MEDIA - solo si incluye aspectos sociales/amistad)
+            7. **work_professional**: Contexto laboral (BAJA PRIORIDAD - solo considera si es dominante y no hay alternativas relacionales)
+            
+            Para cada categoría que consideres relevante (confianza > 0.15 para contextos relacionales, > 0.4 para trabajo), responde en formato JSON:
             [
               {{
                 "category": "nombre_categoria",
                 "confidence": 0.85,
                 "evidence": ["razón 1", "razón 2", "razón 3"],
-                "characteristics": {{"key": "value"}}
+                "characteristics": {{"relational_priority": true, "human_connection_focus": true}}
               }}
             ]
             """
@@ -244,13 +270,31 @@ class ContextDetector:
                 
                 contexts = []
                 for ctx_data in contexts_data:
-                    if isinstance(ctx_data, dict) and ctx_data.get("confidence", 0) > 0.2:
-                        contexts.append(ContextCategory(
-                            category=ctx_data.get("category", "unknown"),
-                            confidence=float(ctx_data.get("confidence", 0.0)),
-                            evidence=ctx_data.get("evidence", []),
-                            characteristics=ctx_data.get("characteristics", {"llm_based": True})
-                        ))
+                    if isinstance(ctx_data, dict):
+                        category = ctx_data.get("category", "unknown")
+                        confidence = float(ctx_data.get("confidence", 0.0))
+                        
+                        # Aplicar filtros de confianza priorizando contextos relacionales
+                        threshold = 0.15  # Umbral bajo para contextos relacionales
+                        if category == "work_professional":
+                            threshold = 0.4  # Umbral alto para trabajo
+                        
+                        if confidence > threshold:
+                            # Boost adicional para contextos relacionales prioritarios
+                            priority_contexts = ["romantic_couple", "family", "friends_casual", "support_emotional"]
+                            if category in priority_contexts:
+                                confidence = min(confidence * 1.2, 1.0)  # Boost del 20%
+                            
+                            contexts.append(ContextCategory(
+                                category=category,
+                                confidence=confidence,
+                                evidence=ctx_data.get("evidence", []),
+                                characteristics={
+                                    **ctx_data.get("characteristics", {}),
+                                    "llm_based": True,
+                                    "relational_priority": category in priority_contexts
+                                }
+                            ))
                 
                 return contexts
                 
@@ -327,7 +371,11 @@ class SpecializedAgentFactory:
         agents = []
         
         for context in detected_contexts:
-            if context.confidence < 0.3:  # Solo crear agentes para contextos con alta confianza
+            # Umbrales dinámicos: más bajos para contextos relacionales prioritarios
+            priority_contexts = ["romantic_couple", "family", "friends_casual", "support_emotional"]
+            threshold = 0.2 if context.category in priority_contexts else 0.4
+            
+            if context.confidence < threshold:
                 continue
                 
             agent = SpecializedAgentFactory._create_agent_for_context(context)
@@ -342,55 +390,67 @@ class SpecializedAgentFactory:
         
         agent_configs = {
             "friends_casual": {
-                "name": "Analizador de Amistad Casual",
-                "system_prompt": """Eres un experto en analizar dinámicas de amistad casual y conversaciones informales.
-                Te especializas en detectar patrones de humor, referencias compartidas, planes sociales,
-                bromas internas y la evolución de amistades a través de mensajes de texto.""",
-                "analysis_focus": ["humor_patterns", "shared_references", "social_planning", "friendship_dynamics"],
+                "name": "Analizador de Vínculos de Amistad",
+                "system_prompt": """Eres un experto en analizar RELACIONES DE AMISTAD y comunicación social humana.
+                Tu enfoque PRINCIPAL es identificar la profundidad de los lazos afectivos, cómo se fortalecen las amistades,
+                patrones de apoyo mutuo, expresiones de cariño entre amigos, momentos de vulnerabilidad compartida,
+                y la evolución emocional de las relaciones de amistad. Prioriza SIEMPRE los aspectos humanos y emocionales
+                por encima de actividades o tareas específicas.""",
+                "analysis_focus": ["emotional_bonds", "friendship_intimacy", "mutual_support", "shared_vulnerability", "affection_expression"],
                 "specialized_prompts": {
-                    "humor_patterns": "Identifica y analiza los patrones de humor en esta conversación entre amigos",
-                    "shared_references": "Detecta referencias compartidas, bromas internas y memes",
-                    "social_planning": "Analiza cómo los amigos planifican actividades y eventos sociales",
-                    "friendship_dynamics": "Evalúa la dinámica y la evolución de la amistad"
+                    "emotional_bonds": "Analiza la profundidad de los lazos emocionales y cómo se manifiesta el cariño entre amigos",
+                    "friendship_intimacy": "Evalúa el nivel de intimidad emocional y confianza mutua en la amistad",
+                    "mutual_support": "Identifica cómo los amigos se apoyan emocionalmente y se cuidan mutuamente",
+                    "shared_vulnerability": "Detecta momentos de vulnerabilidad compartida y apoyo en dificultades",
+                    "affection_expression": "Analiza las formas únicas en que estos amigos expresan cariño y aprecio"
                 }
             },
             "romantic_couple": {
-                "name": "Analizador de Relación Romántica", 
-                "system_prompt": """Eres un experto en analizar dinámicas de pareja y comunicación romántica.
-                Te especializas en detectar expresiones de afecto, patrones de comunicación emocional,
-                resolución de conflictos y la evolución de relaciones románticas.""",
-                "analysis_focus": ["affection_patterns", "emotional_communication", "conflict_resolution", "relationship_evolution"],
+                "name": "Analizador de Intimidad Romántica", 
+                "system_prompt": """Eres un experto en RELACIONES ROMÁNTICAS ÍNTIMAS y conexión emocional profunda.
+                Tu enfoque PRINCIPAL es analizar la intimidad emocional, expresiones de amor auténtico, 
+                cómo la pareja construye y mantiene su vínculo afectivo, momentos de ternura y vulnerabilidad,
+                rituales de afecto únicos, y la calidad de la comunicación íntima. PRIORIZA SIEMPRE los aspectos
+                emocionales, afectivos y de conexión humana profunda por encima de cualquier tema externo.""",
+                "analysis_focus": ["intimate_connection", "love_expressions", "emotional_vulnerability", "affection_rituals", "romantic_communication"],
                 "specialized_prompts": {
-                    "affection_patterns": "Analiza cómo la pareja expresa afecto y cariño",
-                    "emotional_communication": "Evalúa la comunicación emocional entre la pareja",
-                    "conflict_resolution": "Identifica patrones en la resolución de conflictos",
-                    "relationship_evolution": "Analiza la evolución y etapas de la relación"
+                    "intimate_connection": "Analiza la profundidad de la conexión íntima y complicidad entre la pareja",
+                    "love_expressions": "Evalúa las formas únicas y auténticas en que expresan amor mutuo",
+                    "emotional_vulnerability": "Identifica momentos de vulnerabilidad compartida y apoyo incondicional",
+                    "affection_rituals": "Detecta rituales de cariño, apodos íntimos y gestos románticos únicos",
+                    "romantic_communication": "Analiza la calidad y calidez de su comunicación íntima diaria"
                 }
             },
             "family": {
-                "name": "Analizador Familiar",
-                "system_prompt": """Eres un experto en dinámicas familiares y comunicación intergeneracional.
-                Te especializas en detectar roles familiares, patrones de apoyo, tradiciones
-                y la evolución de relaciones familiares.""",
-                "analysis_focus": ["family_roles", "support_patterns", "generational_communication", "family_traditions"],
+                "name": "Analizador de Vínculos Familiares",
+                "system_prompt": """Eres un experto en RELACIONES FAMILIARES y conexiones emocionales intergeneracionales.
+                Tu enfoque PRINCIPAL es analizar los lazos afectivos familiares, expresiones de amor y cuidado,
+                cómo se manifiesta el apoyo emocional incondicional, momentos de ternura familiar,
+                preocupación y protección mutua, y la calidad de la comunicación afectiva entre familiares.
+                PRIORIZA SIEMPRE los aspectos emocionales, de cuidado y conexión humana familiar.""",
+                "analysis_focus": ["family_bonds", "unconditional_love", "protective_care", "emotional_support", "generational_affection"],
                 "specialized_prompts": {
-                    "family_roles": "Identifica los roles y dinámicas familiares",
-                    "support_patterns": "Analiza cómo la familia se apoya mutuamente",
-                    "generational_communication": "Evalúa la comunicación entre generaciones",
-                    "family_traditions": "Detecta tradiciones y rutinas familiares"
+                    "family_bonds": "Analiza la fortaleza y calidad de los vínculos emocionales familiares",
+                    "unconditional_love": "Evalúa expresiones de amor incondicional y aceptación familiar",
+                    "protective_care": "Identifica patrones de protección, cuidado y preocupación mutua",
+                    "emotional_support": "Analiza cómo la familia se sostiene emocionalmente en momentos difíciles",
+                    "generational_affection": "Detecta formas únicas de expresar cariño entre diferentes generaciones"
                 }
             },
             "work_professional": {
-                "name": "Analizador Profesional",
-                "system_prompt": """Eres un experto en comunicación profesional y dinámicas laborales.
-                Te especializas en detectar jerarquías, colaboración, gestión de proyectos
-                y cultura organizacional en comunicaciones laborales.""",
-                "analysis_focus": ["hierarchy_dynamics", "collaboration_patterns", "project_management", "work_culture"],
+                "name": "Analizador de Relaciones Profesionales Humanas",
+                "system_prompt": """Eres un experto en RELACIONES HUMANAS en contextos profesionales.
+                Aunque el contexto sea laboral, tu enfoque PRINCIPAL es analizar las conexiones personales,
+                el apoyo mutuo entre colegas, cómo se cuidan como personas más allá del trabajo,
+                momentos de camaradería genuina, y la dimensión humana de las relaciones profesionales.
+                MINIMIZA el análisis de tareas y MAXIMIZA el análisis de vínculos humanos, incluso en contexto laboral.""",
+                "analysis_focus": ["colleague_bonds", "personal_care", "human_connection", "workplace_friendship", "mutual_support"],
                 "specialized_prompts": {
-                    "hierarchy_dynamics": "Analiza las dinámicas jerárquicas y de poder",
-                    "collaboration_patterns": "Evalúa los patrones de colaboración y trabajo en equipo",
-                    "project_management": "Identifica aspectos de gestión de proyectos y deadlines",
-                    "work_culture": "Analiza la cultura organizacional reflejada en la comunicación"
+                    "colleague_bonds": "Analiza los vínculos personales y la amistad genuina entre colegas",
+                    "personal_care": "Evalúa cómo se preocupan por el bienestar personal mutuo más allá del trabajo",
+                    "human_connection": "Identifica momentos de conexión humana auténtica en el contexto profesional",
+                    "workplace_friendship": "Detecta la evolución de relaciones profesionales hacia amistades genuinas",
+                    "mutual_support": "Analiza el apoyo emocional y personal que se brindan mutuamente"
                 }
             },
             "gaming": {
@@ -407,16 +467,19 @@ class SpecializedAgentFactory:
                 }
             },
             "support_emotional": {
-                "name": "Analizador de Apoyo Emocional",
-                "system_prompt": """Eres un experto en comunicación de apoyo emocional y bienestar psicológico.
-                Te especializas en detectar patrones de apoyo, expresiones emocionales,
-                estrategias de afrontamiento y evolución del bienestar emocional.""",
-                "analysis_focus": ["support_strategies", "emotional_expression", "coping_mechanisms", "wellbeing_evolution"],
+                "name": "Analizador de Conexión Emocional Humana",
+                "system_prompt": """Eres un experto en CONEXIONES EMOCIONALES PROFUNDAS y comunicación del alma humana.
+                Tu enfoque PRINCIPAL es analizar cómo las personas se abren emocionalmente, comparten vulnerabilidades,
+                ofrecen consuelo genuino, crean espacios seguros para la expresión emocional,
+                y construyen puentes de comprensión mutua. PRIORIZA SIEMPRE la calidad de la conexión humana,
+                la empatía auténtica y la capacidad de las personas para sostenerse mutuamente.""",
+                "analysis_focus": ["emotional_openness", "vulnerability_sharing", "empathetic_response", "emotional_safety", "human_understanding"],
                 "specialized_prompts": {
-                    "support_strategies": "Analiza las estrategias de apoyo emocional utilizadas",
-                    "emotional_expression": "Evalúa cómo se expresan y procesan las emociones",
-                    "coping_mechanisms": "Identifica mecanismos de afrontamiento y resiliencia",
-                    "wellbeing_evolution": "Analiza la evolución del bienestar emocional"
+                    "emotional_openness": "Analiza cómo y cuándo las personas se abren emocionalmente de manera auténtica",
+                    "vulnerability_sharing": "Evalúa momentos de vulnerabilidad compartida y la respuesta empática recibida",
+                    "empathetic_response": "Identifica patrones de respuesta empática genuina y comprensión profunda",
+                    "emotional_safety": "Analiza cómo se crea un espacio seguro para la expresión emocional honesta",
+                    "human_understanding": "Detecta momentos de comprensión mutua profunda y conexión emocional significativa"
                 }
             },
             "planning_organizing": {
