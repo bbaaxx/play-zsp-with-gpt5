@@ -122,6 +122,51 @@ def initialize_chat_interface():
         logger.exception("Error initializing chat interface: %s", e)
 
 
+def update_chat_processor_config(provider: str, model: str):
+    """Update chat processor configuration based on selected provider/model."""
+    # This function can be expanded to update the provider configuration
+    # For now, it's a placeholder that could set environment variables or
+    # reconfigure the chat processor's LLM manager
+    pass
+
+
+def update_embeddings_config(provider: str, model: str):
+    """Update embeddings configuration based on selected provider/model."""
+    # Update environment variables for the embedding provider
+    if provider == "github_models":
+        os.environ["USE_LOCAL_EMBEDDINGS"] = "0"
+        os.environ["LMSTUDIO_EMBEDDINGS_ENABLED"] = "0" 
+        os.environ["EMBEDDING_MODEL"] = model
+    elif provider == "lm_studio":
+        os.environ["USE_LOCAL_EMBEDDINGS"] = "0"
+        os.environ["LMSTUDIO_EMBEDDINGS_ENABLED"] = "1"
+        os.environ["LMSTUDIO_EMBEDDING_MODEL"] = model
+    elif provider == "local":
+        os.environ["USE_LOCAL_EMBEDDINGS"] = "1"
+        os.environ["LMSTUDIO_EMBEDDINGS_ENABLED"] = "0"
+        os.environ["LOCAL_EMBEDDING_MODEL"] = model
+    
+    # Clear the pipeline to force reinitialization with new config
+    STATE.chat_processor._pipeline = None
+
+
+def update_analysis_config(provider: str, model: str):
+    """Update analysis configuration based on selected provider/model.""" 
+    # Update environment variables for analysis LLM
+    if provider == "github_models":
+        os.environ["ANALYSIS_MODEL"] = model
+        os.environ["ANALYSIS_PROVIDER"] = "github_models"
+        os.environ["CHAT_MODEL"] = model  # Also update for compatibility
+    elif provider == "lm_studio":
+        os.environ["ANALYSIS_MODEL"] = model
+        os.environ["ANALYSIS_PROVIDER"] = "lm_studio"
+        os.environ["CHAT_MODEL"] = model  # Also update for compatibility
+        os.environ["LMSTUDIO_ENABLED"] = "1"
+    
+    # Update the analytics engine configuration
+    STATE.analytics_engine.update_config(provider, model)
+
+
 def check_llm_status():
     """Check the status of all LLM and embedding providers."""
     return STATE.chat_processor.check_llm_status()
@@ -176,6 +221,66 @@ def get_analysis_summary() -> str:
     return STATE.analytics_engine.get_analysis_summary()
 
 
+def get_available_models(provider: str) -> List[str]:
+    """Get available models for a given provider."""
+    if provider == "github_models":
+        # These are the commonly available models in GitHub Models
+        return [
+            "openai/gpt-4o",
+            "openai/gpt-4o-mini", 
+            "openai/gpt-3.5-turbo",
+            "microsoft/Phi-3.5-mini-instruct",
+            "microsoft/Phi-3.5-MoE-instruct",
+            "meta-llama/Llama-3.2-3B-Instruct",
+            "meta-llama/Llama-3.2-1B-Instruct",
+            "mistralai/Mistral-7B-Instruct-v0.1",
+            "mistralai/Mistral-Nemo"
+        ]
+    elif provider == "lm_studio":
+        # For LM Studio, we can't dynamically query models, so provide default
+        return ["local-chat-model", "custom-model"]
+    return []
+
+
+def get_available_embedding_models(provider: str) -> List[str]:
+    """Get available embedding models for a given provider."""
+    if provider == "github_models":
+        return [
+            "openai/text-embedding-3-small",
+            "openai/text-embedding-3-large", 
+            "openai/text-embedding-ada-002"
+        ]
+    elif provider == "lm_studio":
+        return ["local-embedding-model", "custom-embedding-model"]
+    elif provider == "local":
+        return [
+            "intfloat/multilingual-e5-small",
+            "intfloat/multilingual-e5-base",
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        ]
+    return []
+
+
+def update_models_dropdown(provider: str) -> gr.Dropdown:
+    """Update models dropdown when provider changes."""
+    models = get_available_models(provider)
+    return gr.Dropdown(
+        choices=models,
+        value=models[0] if models else "",
+        label="Modelo"
+    )
+
+
+def update_embedding_models_dropdown(provider: str) -> gr.Dropdown:
+    """Update embedding models dropdown when provider changes."""
+    models = get_available_embedding_models(provider)
+    return gr.Dropdown(
+        choices=models,
+        value=models[0] if models else "",
+        label="Modelo de Embeddings"
+    )
+
+
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="WhatsApp RAG (ES)") as demo:
         gr.Markdown("""
@@ -185,9 +290,54 @@ def build_ui() -> gr.Blocks:
 
         with gr.Row():
             file_input = gr.File(label="Archivo TXT de WhatsApp", file_count="single", type="filepath")
+        
+        # Provider and model selection section
+        with gr.Accordion("⚙️ Configuración de Proveedores", open=False):
+            with gr.Row():
+                # Embeddings configuration
+                with gr.Column():
+                    gr.Markdown("**1. Embeddings**")
+                    embed_provider = gr.Dropdown(
+                        choices=["github_models", "lm_studio", "local"],
+                        value="local",
+                        label="Proveedor de Embeddings"
+                    )
+                    embed_model = gr.Dropdown(
+                        choices=get_available_embedding_models("local"),
+                        value="intfloat/multilingual-e5-small",
+                        label="Modelo de Embeddings"
+                    )
+                
+                # Analysis configuration  
+                with gr.Column():
+                    gr.Markdown("**2. Análisis**")
+                    analysis_provider = gr.Dropdown(
+                        choices=["github_models", "lm_studio"],
+                        value="github_models",
+                        label="Proveedor para Análisis"
+                    )
+                    analysis_model = gr.Dropdown(
+                        choices=get_available_models("github_models"),
+                        value="openai/gpt-4o",
+                        label="Modelo para Análisis"
+                    )
+                
+                # Chat configuration
+                with gr.Column():
+                    gr.Markdown("**3. Chat**")
+                    chat_provider = gr.Dropdown(
+                        choices=["github_models", "lm_studio"],
+                        value="github_models", 
+                        label="Proveedor para Chat"
+                    )
+                    chat_model = gr.Dropdown(
+                        choices=get_available_models("github_models"),
+                        value="openai/gpt-4o",
+                        label="Modelo para Chat"
+                    )
+
         with gr.Row():
             topk = gr.Slider(1, 10, value=5, step=1, label="Top-k")
-            model = gr.Textbox(value=os.environ.get("CHAT_MODEL", "openai/gpt-4o"), label="Modelo LLM (legacy)")
             mmr = gr.Checkbox(value=True, label="MMR")
             lambda_box = gr.Slider(0.0, 1.0, value=0.5, step=0.05, label="λ (MMR)")
             fetchk = gr.Slider(5, 50, value=25, step=1, label="fetch_k")
@@ -247,35 +397,69 @@ def build_ui() -> gr.Blocks:
                         placeholder="Haz clic en 'Análisis Adaptativo' para un análisis de dos etapas con agentes especializados..."
                     )
 
-        def do_index(file):
+        def do_index(file, embed_prov, embed_mod):
+            # Update embedding configuration before indexing
+            update_embeddings_config(embed_prov, embed_mod)
             return index_file(file)
 
-        index_btn.click(fn=do_index, inputs=[file_input], outputs=[status])
-        reindex_btn.click(fn=do_index, inputs=[file_input], outputs=[status])
+        index_btn.click(fn=do_index, inputs=[file_input, embed_provider, embed_model], outputs=[status])
+        reindex_btn.click(fn=do_index, inputs=[file_input, embed_provider, embed_model], outputs=[status])
         clear_btn.click(fn=clear_state, inputs=[], outputs=[chatbot, status])
         status_btn.click(fn=check_llm_status, inputs=[], outputs=[status])
+        def do_analyze_chat(analysis_prov, analysis_mod, progress=gr.Progress()):
+            # Update analysis configuration before running
+            update_analysis_config(analysis_prov, analysis_mod)
+            return analyze_chat(progress)
+        
+        def do_analyze_chat_adaptive(analysis_prov, analysis_mod, progress=gr.Progress()):
+            # Update analysis configuration before running
+            update_analysis_config(analysis_prov, analysis_mod)
+            return analyze_chat_adaptive(progress)
+
         analyze_btn.click(
-            fn=analyze_chat,
-            inputs=[],
+            fn=do_analyze_chat,
+            inputs=[analysis_provider, analysis_model],
             outputs=[analysis_summary, analysis_output],
             show_progress=True
         )
         adaptive_btn.click(
-            fn=analyze_chat_adaptive,
-            inputs=[],
+            fn=do_analyze_chat_adaptive,
+            inputs=[analysis_provider, analysis_model],
             outputs=[adaptive_summary, adaptive_analysis_output],
             show_progress=True
         )
         summary_btn.click(fn=get_analysis_summary, inputs=[], outputs=[status])
 
-        def on_send(msg, k, m, use_mmr, lam, fk, senders, dfrom, dto):
+        # Setup dynamic model dropdown updates
+        embed_provider.change(
+            fn=update_embedding_models_dropdown,
+            inputs=[embed_provider],
+            outputs=[embed_model]
+        )
+        
+        analysis_provider.change(
+            fn=update_models_dropdown,
+            inputs=[analysis_provider], 
+            outputs=[analysis_model]
+        )
+        
+        chat_provider.change(
+            fn=update_models_dropdown,
+            inputs=[chat_provider],
+            outputs=[chat_model]
+        )
+
+        def on_send(msg, k, chat_prov, chat_mod, use_mmr, lam, fk, senders, dfrom, dto):
             # Initialize chat interface with analysis context if needed
             initialize_chat_interface()
+            
+            # Update chat processor configuration based on selected provider/model
+            update_chat_processor_config(chat_prov, chat_mod)
             
             # normalize sender list
             senders_list = [s.strip() for s in (senders or "").split(',') if s.strip()]
             chat_hist, err = chat(
-                msg, int(k), m, use_mmr, float(lam), int(fk), senders_list or None, dfrom or None, dto or None
+                msg, int(k), chat_mod, use_mmr, float(lam), int(fk), senders_list or None, dfrom or None, dto or None
             )
             if err:
                 return chat_hist, err, gr.update(value="")
@@ -283,12 +467,12 @@ def build_ui() -> gr.Blocks:
 
         send_btn.click(
             fn=on_send,
-            inputs=[user_input, topk, model, mmr, lambda_box, fetchk, sender_filter, date_from, date_to],
+            inputs=[user_input, topk, chat_provider, chat_model, mmr, lambda_box, fetchk, sender_filter, date_from, date_to],
             outputs=[chatbot, status, user_input]
         )
         user_input.submit(
             fn=on_send,
-            inputs=[user_input, topk, model, mmr, lambda_box, fetchk, sender_filter, date_from, date_to],
+            inputs=[user_input, topk, chat_provider, chat_model, mmr, lambda_box, fetchk, sender_filter, date_from, date_to],
             outputs=[chatbot, status, user_input]
         )
 

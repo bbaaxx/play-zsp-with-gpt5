@@ -41,6 +41,19 @@ class AnalyticsEngine:
         self.llm_manager = LLMManager()
         self._chat_processor: Optional[object] = None
     
+    def update_config(self, provider: str, model: str):
+        """Update analysis configuration for a specific provider and model."""
+        if provider == "github_models":
+            # Keep existing GitHub Models configuration
+            self.config.model_name = model
+        elif provider == "lm_studio":
+            # Update for LM Studio
+            self.config.model_name = model
+            os.environ["LMSTUDIO_ENABLED"] = "1"
+        
+        # Recreate LLM manager to pick up new configuration
+        self.llm_manager = LLMManager()
+    
     def _validate_configuration(self) -> Optional[str]:
         """Validate that required configuration is present."""
         if not self.config.github_token:
