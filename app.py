@@ -6,6 +6,9 @@ import gradio as gr
 from typing import List, Tuple, Optional
 from dotenv import load_dotenv
 
+# Load .env file with override=True to take precedence over existing env vars
+load_dotenv(override=True)
+
 from rag.core import (
     parse_whatsapp_txt,
     RAGPipeline,
@@ -52,7 +55,7 @@ except Exception:
     pass
 
 
-load_dotenv()
+load_dotenv(override=True)
 
 # Basic logging setup
 logging.basicConfig(
@@ -295,10 +298,14 @@ def chat(
     return STATE.chat_history, ""
 
 
-def analyze_chat() -> str:
+def analyze_chat(progress=gr.Progress()) -> str:
     """Realiza un análisis inteligente del chat usando smolagents."""
+    progress(0, desc="Iniciando análisis...")
+    
     if STATE.chat_dataframe is None or STATE.chat_dataframe.is_empty:
         return "No hay datos de chat cargados para analizar. Primero indexa un archivo."
+    
+    progress(0.1, desc="Verificando configuración...")
     
     # Check if GitHub token is configured
     github_token = os.environ.get("GITHUB_TOKEN")
@@ -311,13 +318,21 @@ def analyze_chat() -> str:
                 "El token necesita acceso a GitHub Models para funcionar.")
     
     try:
+        progress(0.2, desc="Configurando analizador...")
+        
         # Obtener configuración del modelo LLM
         model_name = os.environ.get("CHAT_MODEL", "gpt-4o-mini")
         analyzer = ChatAnalyzer(llm_model_name=model_name)
         
+        progress(0.3, desc="Ejecutando análisis inteligente... (esto puede tomar algunos minutos)")
+        
         # Realizar análisis completo
         result = analyzer.full_analysis(STATE.chat_dataframe)
         STATE.last_analysis = result
+        
+        progress(0.8, desc="Procesando resultados...")
+        
+        progress(0.9, desc="Formateando resultados...")
         
         # Formatear resultados para mostrar
         output = ["=== ANÁLISIS INTELIGENTE DE CONVERSACIÓN ===\n"]
@@ -365,6 +380,8 @@ def analyze_chat() -> str:
         output.append(f"- Mensajes analizados: {result.analysis_metadata.get('total_messages_analyzed', 0)}")
         output.append(f"- Modelo usado: {result.analysis_metadata.get('model_used', 'N/A')}")
         output.append(f"- Análisis realizado: {result.analysis_metadata.get('analysis_timestamp', 'N/A')}")
+        
+        progress(1.0, desc="✅ Análisis completado")
         
         return "\n".join(output)
         
@@ -442,7 +459,12 @@ def build_ui() -> gr.Blocks:
         reindex_btn.click(fn=do_index, inputs=[file_input], outputs=[status])
         clear_btn.click(fn=clear_state, inputs=[], outputs=[chatbot, status])
         status_btn.click(fn=check_llm_status, inputs=[], outputs=[status])
-        analyze_btn.click(fn=analyze_chat, inputs=[], outputs=[analysis_output])
+        analyze_btn.click(
+            fn=analyze_chat,
+            inputs=[],
+            outputs=[analysis_output],
+            show_progress=True
+        )
         summary_btn.click(fn=get_analysis_summary, inputs=[], outputs=[status])
 
         def on_send(msg, k, m, use_mmr, lam, fk, senders, dfrom, dto):

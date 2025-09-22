@@ -4,6 +4,10 @@ from typing import List, Optional, Iterable
 
 import numpy as np
 import httpx
+from dotenv import load_dotenv
+
+# Load .env file with override=True to take precedence over existing env vars
+load_dotenv(override=True)
 
 try:
     from sentence_transformers import SentenceTransformer  # type: ignore

@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 
+from dotenv import load_dotenv
+
+# Load .env file with override=True to take precedence over existing env vars
+load_dotenv(override=True)
 
 from .embeddings import EmbeddingProvider
 from .vector_store import VectorStore, create_vector_store

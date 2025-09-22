@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -8,6 +9,10 @@ import re
 
 import pandas as pd
 import os
+from dotenv import load_dotenv
+
+# Load .env file with override=True to take precedence over existing env vars
+load_dotenv(override=True)
 
 # Try to import OpenAI client directly for LLM calls
 try:
@@ -15,6 +20,8 @@ try:
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+
+from .llm_providers import LLMManager
 
 from .analysis import ChatDataFrame
 
@@ -67,42 +74,27 @@ class ChatAnalyzer:
     def __init__(self, llm_model_name: Optional[str] = None):
         """
         Inicializa el analizador con un modelo LLM.
-        
+
         Args:
             llm_model_name: Nombre del modelo LLM a usar (por defecto usa OpenAI GPT-4)
         """
         self.model_name = llm_model_name or "gpt-4o-mini"
+        self.llm_manager = LLMManager()
         
     def _call_llm(self, prompt: str) -> str:
         """Llama al modelo LLM con el prompt dado."""
-        if not OPENAI_AVAILABLE:
-            raise RuntimeError("OpenAI client no está disponible")
-        
+        messages = [
+            {
+                "role": "system",
+                "content": """Eres un experto analista de conversaciones de WhatsApp.
+                Tu trabajo es identificar patrones interesantes, comportamientos anómalos y mensajes memorables
+                en conversaciones en español. Proporciona análisis detallados y estructurados."""
+            },
+            {"role": "user", "content": prompt}
+        ]
+
         try:
-            # Use GitHub Models API configuration
-            token = os.environ.get("GITHUB_TOKEN")
-            base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.github.ai/inference")
-            
-            if not token:
-                raise RuntimeError("GITHUB_TOKEN no configurado")
-            
-            client = OpenAI(api_key=token, base_url=base_url)
-            
-            response = client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {
-                        "role": "system", 
-                        "content": """Eres un experto analista de conversaciones de WhatsApp. 
-                        Tu trabajo es identificar patrones interesantes, comportamientos anómalos y mensajes memorables 
-                        en conversaciones en español. Proporciona análisis detallados y estructurados."""
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.2,
-                max_tokens=2000
-            )
-            return response.choices[0].message.content or ""
+            return self.llm_manager.generate_response(messages, temperature=0.2, max_tokens=2000)
         except Exception as e:
             raise RuntimeError(f"Error al llamar al modelo LLM: {e}")
     
@@ -441,9 +433,14 @@ class ChatAnalyzer:
     def _basic_quote_selection(self, data_frame: ChatDataFrame, limit: int) -> List[QuotableMessage]:
         """Selección básica de mensajes citables sin LLM como fallback."""
         df = data_frame.df
-        
+
+        logging.info(f"DataFrame columns: {list(df.columns)}")
+        logging.info(f"Limit: {limit}")
+        logging.info(f"Message lengths sample: {df['message'].str.len().head().tolist()}")
+
         # Seleccionar mensajes más largos como proxy para contenido interesante
-        long_messages = df.nlargest(limit, df['message'].str.len())
+        df['message_length'] = df['message'].str.len()
+        long_messages = df.nlargest(limit, 'message_length')
         
         quotes = []
         for _, row in long_messages.iterrows():
