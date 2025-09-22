@@ -121,7 +121,7 @@ class EmbeddingProvider:
 
         # Setup GitHub Models provider
         if not self.use_local_fallback:
-            base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.github.ai/inference")
+            base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.inference.ai.azure.com")
             token = os.environ.get("GITHUB_TOKEN")
             if token:
                 self._remote_base_url = base_url.rstrip("/")

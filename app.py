@@ -229,37 +229,17 @@ def _fetch_github_models() -> List[str]:
         import httpx
     except ImportError:
         logger.error("httpx not available for fetching GitHub models")
-        return [
-            "openai/gpt-4o",
-            "openai/gpt-4o-mini", 
-            "openai/gpt-3.5-turbo",
-            "microsoft/Phi-3.5-mini-instruct",
-            "microsoft/Phi-3.5-MoE-instruct",
-            "meta-llama/Llama-3.2-3B-Instruct",
-            "meta-llama/Llama-3.2-1B-Instruct",
-            "mistralai/Mistral-7B-Instruct-v0.1",
-            "mistralai/Mistral-Nemo"
-        ]
+        return _get_github_models_fallback()
     
     token = os.environ.get("GITHUB_TOKEN")
-    base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.github.ai/inference")
     
     if not token:
         # Return hardcoded fallback list if no token
-        return [
-            "openai/gpt-4o",
-            "openai/gpt-4o-mini", 
-            "openai/gpt-3.5-turbo",
-            "microsoft/Phi-3.5-mini-instruct",
-            "microsoft/Phi-3.5-MoE-instruct",
-            "meta-llama/Llama-3.2-3B-Instruct",
-            "meta-llama/Llama-3.2-1B-Instruct",
-            "mistralai/Mistral-7B-Instruct-v0.1",
-            "mistralai/Mistral-Nemo"
-        ]
+        return _get_github_models_fallback()
     
     try:
-        url = f"{base_url}/models"
+        # Use the correct GitHub API endpoint for models
+        url = "https://api.github.com/models"
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
@@ -273,84 +253,112 @@ def _fetch_github_models() -> List[str]:
             
             models = []
             
-            # Handle different API response formats
-            if isinstance(data, dict):
-                if "data" in data:
-                    # Response has data wrapper
-                    model_list = data["data"]
-                elif "models" in data:
-                    # Response has models wrapper
-                    model_list = data["models"]
-                else:
-                    # Direct model list in dict
-                    model_list = data.get("object", []) if data.get("object") == "list" else []
-                    if not model_list and "id" in data:
-                        # Single model response
-                        model_list = [data]
-            elif isinstance(data, list):
-                # Direct model list
-                model_list = data
-            else:
-                model_list = []
-            
-            for model in model_list:
-                if isinstance(model, dict):
-                    # Extract model ID/name from different possible fields
-                    model_id = model.get("id") or model.get("name") or model.get("model")
-                    if model_id:
-                        # Filter for chat/completion models (exclude embedding-only models)
-                        model_type = model.get("type", "").lower()
-                        object_type = model.get("object", "").lower()
-                        
-                        # Include if it's a chat/completion model or type is not specified
-                        if (not model_type or 
-                            "chat" in model_type or 
-                            "completion" in model_type or 
-                            "text" in model_type or
-                            object_type == "model"):
+            # Handle the GitHub models API response format
+            if isinstance(data, list):
+                # Direct model list from GitHub API
+                for model in data:
+                    if isinstance(model, dict):
+                        model_id = model.get("name") or model.get("id")
+                        if model_id:
+                            # Filter for text generation models (exclude embedding models)
+                            model_type = model.get("type", "").lower()
+                            tags = model.get("tags", [])
                             
-                            # Skip embedding-only models
-                            if ("embedding" not in model_id.lower() or 
-                                "chat" in model_type or 
-                                "completion" in model_type):
-                                models.append(model_id)
-                elif isinstance(model, str):
-                    # Direct string model name
-                    models.append(model)
+                            # Include models that are for text generation/chat
+                            if (not model_type or 
+                                model_type in ["text-generation", "conversational", "chat"] or
+                                "chat" in tags or
+                                "text-generation" in tags or
+                                "conversational" in tags):
+                                
+                                # Skip embedding models specifically
+                                if not (model_type == "embedding" or "embedding" in tags):
+                                    models.append(model_id)
+                            
+            elif isinstance(data, dict):
+                # Handle wrapped response
+                model_list = data.get("data", data.get("models", []))
+                if isinstance(model_list, list):
+                    for model in model_list:
+                        if isinstance(model, dict):
+                            model_id = model.get("name") or model.get("id")
+                            if model_id:
+                                model_type = model.get("type", "").lower()
+                                tags = model.get("tags", [])
+                                
+                                if (not model_type or 
+                                    model_type in ["text-generation", "conversational", "chat"] or
+                                    "chat" in tags or
+                                    "text-generation" in tags or
+                                    "conversational" in tags):
+                                    
+                                    if not (model_type == "embedding" or "embedding" in tags):
+                                        models.append(model_id)
             
             # Sort models and remove duplicates
             models = sorted(list(set(models)))
             
-            # If no models found, return fallback
+            # If no models found via API, return fallback
             if not models:
-                return [
-                    "openai/gpt-4o",
-                    "openai/gpt-4o-mini", 
-                    "openai/gpt-3.5-turbo",
-                    "microsoft/Phi-3.5-mini-instruct",
-                    "microsoft/Phi-3.5-MoE-instruct",
-                    "meta-llama/Llama-3.2-3B-Instruct",
-                    "meta-llama/Llama-3.2-1B-Instruct",
-                    "mistralai/Mistral-7B-Instruct-v0.1",
-                    "mistralai/Mistral-Nemo"
-                ]
+                logger.warning("No models returned from GitHub API, using fallback list")
+                return _get_github_models_fallback()
             
+            logger.info(f"Successfully fetched {len(models)} models from GitHub Models API")
             return models
             
     except Exception as e:
         logger.error(f"Error fetching GitHub Models: {e}")
         # Return hardcoded fallback list on error
-        return [
-            "openai/gpt-4o",
-            "openai/gpt-4o-mini", 
-            "openai/gpt-3.5-turbo",
-            "microsoft/Phi-3.5-mini-instruct",
-            "microsoft/Phi-3.5-MoE-instruct",
-            "meta-llama/Llama-3.2-3B-Instruct",
-            "meta-llama/Llama-3.2-1B-Instruct",
-            "mistralai/Mistral-7B-Instruct-v0.1",
-            "mistralai/Mistral-Nemo"
-        ]
+        return _get_github_models_fallback()
+
+
+def _get_github_models_fallback() -> List[str]:
+    """Get fallback list of known GitHub Models."""
+    return [
+        # OpenAI models
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-3.5-turbo",
+        "gpt-4",
+        "gpt-4-turbo",
+        
+        # Microsoft Phi models
+        "Phi-3-medium-128k-instruct",
+        "Phi-3-medium-4k-instruct", 
+        "Phi-3-mini-128k-instruct",
+        "Phi-3-mini-4k-instruct",
+        "Phi-3-small-128k-instruct",
+        "Phi-3-small-8k-instruct",
+        "Phi-3.5-mini-instruct",
+        "Phi-3.5-MoE-instruct",
+        
+        # Meta Llama models
+        "Llama-3.2-11B-Vision-Instruct",
+        "Llama-3.2-90B-Vision-Instruct",
+        "Llama-3.2-1B-Instruct",
+        "Llama-3.2-3B-Instruct",
+        "Meta-Llama-3-70B-Instruct",
+        "Meta-Llama-3-8B-Instruct",
+        "Meta-Llama-3.1-405B-Instruct",
+        "Meta-Llama-3.1-70B-Instruct",
+        "Meta-Llama-3.1-8B-Instruct",
+        
+        # Mistral models
+        "Mistral-7B-Instruct-v0.1",
+        "Mistral-7B-Instruct-v0.3",
+        "Mistral-large",
+        "Mistral-large-2407",
+        "Mistral-Nemo",
+        "Mistral-small",
+        
+        # Cohere models  
+        "Cohere-command-r",
+        "Cohere-command-r-plus",
+        
+        # AI21 models
+        "jamba-1.5-large",
+        "jamba-1.5-mini"
+    ]
 
 
 def get_available_models(provider: str) -> List[str]:
@@ -369,25 +377,17 @@ def _fetch_github_embedding_models() -> List[str]:
         import httpx
     except ImportError:
         logger.error("httpx not available for fetching GitHub embedding models")
-        return [
-            "openai/text-embedding-3-small",
-            "openai/text-embedding-3-large", 
-            "openai/text-embedding-ada-002"
-        ]
+        return _get_github_embedding_models_fallback()
     
     token = os.environ.get("GITHUB_TOKEN")
-    base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.github.ai/inference")
     
     if not token:
         # Return hardcoded fallback list if no token
-        return [
-            "openai/text-embedding-3-small",
-            "openai/text-embedding-3-large", 
-            "openai/text-embedding-ada-002"
-        ]
+        return _get_github_embedding_models_fallback()
     
     try:
-        url = f"{base_url}/models"
+        # Use the correct GitHub API endpoint for models
+        url = "https://api.github.com/models"
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
@@ -401,55 +401,63 @@ def _fetch_github_embedding_models() -> List[str]:
             
             models = []
             
-            # Handle different API response formats
-            if isinstance(data, dict):
-                if "data" in data:
-                    model_list = data["data"]
-                elif "models" in data:
-                    model_list = data["models"]
-                else:
-                    model_list = data.get("object", []) if data.get("object") == "list" else []
-                    if not model_list and "id" in data:
-                        model_list = [data]
-            elif isinstance(data, list):
-                model_list = data
-            else:
-                model_list = []
-            
-            for model in model_list:
-                if isinstance(model, dict):
-                    model_id = model.get("id") or model.get("name") or model.get("model")
-                    if model_id:
-                        # Filter for embedding models
-                        model_type = model.get("type", "").lower()
-                        
-                        # Include if it's specifically an embedding model
-                        if ("embedding" in model_id.lower() or 
-                            "embedding" in model_type):
-                            models.append(model_id)
-                elif isinstance(model, str) and "embedding" in model.lower():
-                    models.append(model)
+            # Handle the GitHub models API response format
+            if isinstance(data, list):
+                # Direct model list from GitHub API
+                for model in data:
+                    if isinstance(model, dict):
+                        model_id = model.get("name") or model.get("id")
+                        if model_id:
+                            # Filter for embedding models
+                            model_type = model.get("type", "").lower()
+                            tags = model.get("tags", [])
+                            
+                            # Include models that are specifically for embedding
+                            if (model_type == "embedding" or 
+                                "embedding" in tags or
+                                "embedding" in model_id.lower()):
+                                models.append(model_id)
+                            
+            elif isinstance(data, dict):
+                # Handle wrapped response
+                model_list = data.get("data", data.get("models", []))
+                if isinstance(model_list, list):
+                    for model in model_list:
+                        if isinstance(model, dict):
+                            model_id = model.get("name") or model.get("id")
+                            if model_id:
+                                model_type = model.get("type", "").lower()
+                                tags = model.get("tags", [])
+                                
+                                if (model_type == "embedding" or 
+                                    "embedding" in tags or
+                                    "embedding" in model_id.lower()):
+                                    models.append(model_id)
             
             # Sort models and remove duplicates
             models = sorted(list(set(models)))
             
-            # If no embedding models found, return fallback
+            # If no embedding models found via API, return fallback
             if not models:
-                return [
-                    "openai/text-embedding-3-small",
-                    "openai/text-embedding-3-large", 
-                    "openai/text-embedding-ada-002"
-                ]
+                logger.warning("No embedding models returned from GitHub API, using fallback list")
+                return _get_github_embedding_models_fallback()
             
+            logger.info(f"Successfully fetched {len(models)} embedding models from GitHub Models API")
             return models
             
     except Exception as e:
         logger.error(f"Error fetching GitHub embedding models: {e}")
-        return [
-            "openai/text-embedding-3-small",
-            "openai/text-embedding-3-large", 
-            "openai/text-embedding-ada-002"
-        ]
+        return _get_github_embedding_models_fallback()
+
+
+def _get_github_embedding_models_fallback() -> List[str]:
+    """Get fallback list of known GitHub embedding models."""
+    return [
+        # OpenAI embedding models
+        "text-embedding-3-small",
+        "text-embedding-3-large", 
+        "text-embedding-ada-002"
+    ]
 
 
 def get_available_embedding_models(provider: str) -> List[str]:
@@ -545,7 +553,7 @@ def build_ui() -> gr.Blocks:
                     )
                     analysis_model = gr.Dropdown(
                         choices=get_available_models("github_models"),
-                        value="openai/gpt-4o",
+                        value="gpt-4o",
                         label="Modelo para Análisis"
                     )
                     analysis_refresh_btn = gr.Button("🔄", size="sm", variant="secondary")
@@ -560,7 +568,7 @@ def build_ui() -> gr.Blocks:
                     )
                     chat_model = gr.Dropdown(
                         choices=get_available_models("github_models"),
-                        value="openai/gpt-4o",
+                        value="gpt-4o",
                         label="Modelo para Chat"
                     )
                     chat_refresh_btn = gr.Button("🔄", size="sm", variant="secondary")

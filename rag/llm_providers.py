@@ -46,9 +46,9 @@ class GitHubModelsProvider(LLMProvider):
     """GitHub Models provider using OpenAI-compatible API."""
 
     def __init__(self, model_name: Optional[str] = None):
-        self.model_name = model_name or os.environ.get("CHAT_MODEL", "openai/gpt-4o")
+        self.model_name = model_name or os.environ.get("CHAT_MODEL", "gpt-4o")
         self.token = os.environ.get("GITHUB_TOKEN")
-        self.base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.github.ai/inference")
+        self.base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.inference.ai.azure.com")
 
     def generate_response(
         self,
@@ -63,9 +63,7 @@ class GitHubModelsProvider(LLMProvider):
         url = f"{self.base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28"
+            "Content-Type": "application/json"
         }
 
         payload = {
@@ -90,6 +88,9 @@ class GitHubModelsProvider(LLMProvider):
         except httpx.TimeoutException:
             logger.error("Timeout conectando a GitHub Models")
             raise RuntimeError("Timeout conectando a GitHub Models")
+        except httpx.HTTPStatusError as e:
+            logger.error("HTTP error %s en GitHub Models: %s", e.response.status_code, e.response.text)
+            raise RuntimeError(f"HTTP {e.response.status_code} error from GitHub Models")
         except Exception as e:
             logger.error("Error en GitHub Models: %s", e)
             raise

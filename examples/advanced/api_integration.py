@@ -58,7 +58,7 @@ class APIConfig:
     max_cache_entries: int = 1000
     
     # Integration endpoints
-    llm_endpoint: str = "https://models.github.ai/inference/chat/completions"
+    llm_endpoint: str = "https://models.inference.ai.azure.com/chat/completions"
     webhook_endpoint: Optional[str] = None
     database_url: Optional[str] = None
     

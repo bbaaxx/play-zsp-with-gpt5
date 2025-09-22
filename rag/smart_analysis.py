@@ -15,9 +15,10 @@ load_dotenv(override=True)
 
 # Try to import OpenAI client directly for LLM calls
 try:
-    from openai import OpenAI
+    import openai
     OPENAI_AVAILABLE = True
 except ImportError:
+    openai = None  # type: ignore
     OPENAI_AVAILABLE = False
 
 from .llm_providers import LLMManager

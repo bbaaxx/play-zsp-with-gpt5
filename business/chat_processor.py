@@ -168,7 +168,7 @@ class ChatProcessor:
         if OpenAI is None:
             return None
         token = os.environ.get("GITHUB_TOKEN")
-        base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.github.ai/inference")
+        base_url = os.environ.get("GH_MODELS_BASE_URL", "https://models.inference.ai.azure.com")
         if not token:
             return None
         
