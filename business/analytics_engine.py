@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional
 from dataclasses import dataclass
 
 from rag import ChatDataFrame, ChatAnalyzer, AnalysisResult, AdaptiveAnalyzer, AdaptiveAnalysisResult
@@ -160,13 +160,13 @@ class AnalyticsEngine:
     
     def analyze_chat_basic(self, chat_dataframe: ChatDataFrame, progress_callback=None) -> str:
         """Perform basic intelligent chat analysis using smolagents."""
-        if progress_callback:
+        if progress_callback is not None:
             progress_callback(0, desc="Iniciando análisis...")
         
         if chat_dataframe is None or chat_dataframe.is_empty:
             return "No hay datos de chat cargados para analizar. Primero indexa un archivo."
         
-        if progress_callback:
+        if progress_callback is not None:
             progress_callback(0.1, desc="Verificando configuración...")
         
         # Check configuration
@@ -175,26 +175,26 @@ class AnalyticsEngine:
             return config_error
         
         try:
-            if progress_callback:
+            if progress_callback is not None:
                 progress_callback(0.2, desc="Configurando analizador...")
             
             # Create analyzer
             analyzer = ChatAnalyzer(llm_model_name=self.config.model_name)
             
-            if progress_callback:
+            if progress_callback is not None:
                 progress_callback(0.3, desc="Ejecutando análisis inteligente... (esto puede tomar algunos minutos)")
             
             # Perform full analysis
             result = analyzer.full_analysis(chat_dataframe)
             self.last_analysis = result
             
-            if progress_callback:
+            if progress_callback is not None:
                 progress_callback(0.8, desc="Procesando resultados...")
                 progress_callback(0.9, desc="Formateando resultados...")
             
             formatted_results = self._format_basic_analysis_results(result)
             
-            if progress_callback:
+            if progress_callback is not None:
                 progress_callback(1.0, desc="✅ Análisis completado")
             
             return formatted_results
@@ -205,13 +205,13 @@ class AnalyticsEngine:
     
     def analyze_chat_adaptive(self, chat_dataframe: ChatDataFrame, progress_callback=None) -> str:
         """Perform adaptive two-stage analysis."""
-        if progress_callback:
+        if progress_callback is not None:
             progress_callback(0, desc="Iniciando análisis adaptativo...")
         
         if chat_dataframe is None or chat_dataframe.is_empty:
             return "No hay datos de chat cargados para analizar. Primero indexa un archivo."
         
-        if progress_callback:
+        if progress_callback is not None:
             progress_callback(0.1, desc="Verificando configuración...")
         
         # Check configuration
@@ -220,13 +220,13 @@ class AnalyticsEngine:
             return config_error.replace("análisis inteligente", "análisis adaptativo")
         
         try:
-            if progress_callback:
+            if progress_callback is not None:
                 progress_callback(0.2, desc="Configurando analizador adaptativo...")
             
             # Create adaptive analyzer
             adaptive_analyzer = AdaptiveAnalyzer()
             
-            if progress_callback:
+            if progress_callback is not None:
                 progress_callback(0.3, desc="Etapa 1: Ejecutando análisis básico...")
                 progress_callback(0.5, desc="Etapa 2: Detectando contextos de conversación...")
                 progress_callback(0.7, desc="Etapa 3: Creando agentes especializados...")
@@ -236,12 +236,12 @@ class AnalyticsEngine:
             result = adaptive_analyzer.analyze(chat_dataframe)
             self.last_adaptive_analysis = result
             
-            if progress_callback:
+            if progress_callback is not None:
                 progress_callback(0.95, desc="Formateando resultados...")
             
             formatted_results = self._format_adaptive_analysis_results(result)
             
-            if progress_callback:
+            if progress_callback is not None:
                 progress_callback(1.0, desc="✅ Análisis adaptativo completado")
             
             return formatted_results

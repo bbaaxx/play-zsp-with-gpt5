@@ -1,5 +1,7 @@
 from .core import RAGPipeline, parse_whatsapp_txt, ChatMessage, Chunk
 from .analysis import ChatDataFrame
+from .embeddings import EmbeddingProvider
+from .vector_store import VectorStore, InMemoryFAISS, QdrantVectorStore, create_vector_store
 from .smart_analysis import (
     ChatAnalyzer,
     TrendSummary,
