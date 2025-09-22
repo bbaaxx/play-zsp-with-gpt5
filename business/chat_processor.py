@@ -9,6 +9,7 @@ import logging
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
+from datetime import datetime
 from rag.core import RAGPipeline, build_user_prompt, SYSTEM_PROMPT
 
 try:
@@ -46,6 +47,8 @@ class ChatProcessor:
         self._vector_backend = vector_backend or os.environ.get("VECTOR_BACKEND", "faiss").lower()
         self._vector_store_kwargs = vector_store_kwargs
         self.chat_history: List[Tuple[str, str]] = []
+        self._analysis_summary: Optional[str] = None
+        self._dynamic_system_prompt: Optional[str] = None
     
     def get_pipeline(self) -> RAGPipeline:
         """Get or create RAG pipeline instance."""
@@ -109,6 +112,8 @@ class ChatProcessor:
         """Clear all chat state and reset pipeline."""
         self._pipeline = None
         self.chat_history = []
+        self._analysis_summary = None
+        self._dynamic_system_prompt = None
         logger.info("Estado del procesador de chat limpiado")
     
     def check_llm_status(self) -> str:
@@ -208,7 +213,9 @@ class ChatProcessor:
 
         # Try using the new LLM manager first
         try:
-            answer = pipeline.generate_answer(context, user_msg)
+            # Use dynamic system prompt if available
+            system_prompt = self.get_system_prompt()
+            answer = pipeline.generate_answer(context, user_msg, system_prompt)
             logger.info("Respuesta LLM generada (%d chars)", len(answer))
         except Exception as e:
             logger.warning("Fallo en proveedores LLM nuevos: %s", e)
@@ -223,10 +230,11 @@ class ChatProcessor:
             else:
                 try:
                     user_prompt = build_user_prompt(context, user_msg)
+                    system_prompt = self.get_system_prompt()
                     resp = client.chat.completions.create(
                         model=model_name or os.environ.get("CHAT_MODEL", "openai/gpt-4o"),
                         messages=[
-                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},
                         ],
                         temperature=0.2,
@@ -244,3 +252,54 @@ class ChatProcessor:
     def get_chat_history(self) -> List[Tuple[str, str]]:
         """Get current chat history."""
         return self.chat_history.copy()
+    
+    def add_analysis_to_vector_store(self, analysis_text: str, analysis_type: str = "analysis"):
+        """Store analysis results in the vector database."""
+        pipeline = self.get_pipeline()
+        
+        # Create metadata for the analysis document
+        analysis_metadata = {
+            "chunk_id": f"{analysis_type}_{len(pipeline.chunks)}",
+            "chat_id": "analysis",
+            "start_ts": datetime.now().isoformat(),
+            "end_ts": datetime.now().isoformat(), 
+            "participants": ["system"],
+            "line_span": [-1, -1],
+            "text_window": analysis_text,
+            "document_type": analysis_type
+        }
+        
+        # Generate embeddings for the analysis text
+        analysis_embeddings = pipeline.embedder.embed_texts([analysis_text])
+        
+        # Add to vector store if it exists
+        if pipeline.vector_store is not None:
+            pipeline.vector_store.add(
+                ids=[analysis_metadata["chunk_id"]],
+                embeddings=analysis_embeddings,
+                metadatas=[analysis_metadata]
+            )
+            logger.info("Added %s to vector store", analysis_type)
+        else:
+            logger.warning("No vector store available to add analysis")
+    
+    def update_system_prompt_with_analysis(self, analysis_summary: str):
+        """Update the system prompt to include analysis context."""
+        self._analysis_summary = analysis_summary
+        
+        base_prompt = SYSTEM_PROMPT
+        
+        # Create enhanced system prompt with analysis context
+        self._dynamic_system_prompt = (
+            f"{base_prompt}\n\n"
+            "CONTEXTO DEL ANÁLISIS PREVIO:\n"
+            f"{analysis_summary}\n\n"
+            "Utiliza este contexto del análisis cuando sea relevante para responder preguntas, "
+            "especialmente sobre patrones, tendencias, participantes destacados, o características generales de la conversación."
+        )
+        
+        logger.info("Updated system prompt with analysis context")
+    
+    def get_system_prompt(self) -> str:
+        """Get the current system prompt (base or enhanced with analysis)."""
+        return self._dynamic_system_prompt or SYSTEM_PROMPT

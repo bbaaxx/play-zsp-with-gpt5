@@ -39,6 +39,7 @@ class AnalyticsEngine:
         self.last_analysis_summary: Optional[str] = None
         self.last_adaptive_summary: Optional[str] = None
         self.llm_manager = LLMManager()
+        self._chat_processor: Optional[object] = None
     
     def _validate_configuration(self) -> Optional[str]:
         """Validate that required configuration is present."""
@@ -245,6 +246,9 @@ Responde SOLO con el resumen, sin preámbulos ni explicaciones adicionales."""
             # Generate LLM-powered summary
             self.last_analysis_summary = self._generate_analysis_summary(formatted_results, "análisis básico")
             
+            # Store analysis in vector database and update system prompt
+            self._integrate_analysis_results(formatted_results, self.last_analysis_summary, "basic_analysis")
+            
             if progress_callback is not None:
                 progress_callback(1.0, desc="✅ Análisis completado")
             
@@ -298,6 +302,9 @@ Responde SOLO con el resumen, sin preámbulos ni explicaciones adicionales."""
             # Generate LLM-powered summary
             self.last_adaptive_summary = self._generate_analysis_summary(formatted_results, "análisis adaptativo")
             
+            # Store analysis in vector database and update system prompt
+            self._integrate_analysis_results(formatted_results, self.last_adaptive_summary, "adaptive_analysis")
+            
             if progress_callback is not None:
                 progress_callback(1.0, desc="✅ Análisis adaptativo completado")
             
@@ -346,6 +353,27 @@ Responde SOLO con el resumen, sin preámbulos ni explicaciones adicionales."""
         """Get the summary of the last adaptive analysis."""
         return self.last_adaptive_summary
     
+    def set_chat_processor(self, chat_processor: object):
+        """Set the chat processor reference for integration."""
+        self._chat_processor = chat_processor
+        
+    def _integrate_analysis_results(self, full_analysis: str, summary: str, analysis_type: str):
+        """Integrate analysis results into the chat system."""
+        if not self._chat_processor:
+            logger.warning("No chat processor available for analysis integration")
+            return
+            
+        try:
+            # Store full analysis in vector database
+            self._chat_processor.add_analysis_to_vector_store(full_analysis, analysis_type)
+            
+            # Update system prompt with analysis summary
+            self._chat_processor.update_system_prompt_with_analysis(summary)
+            
+            logger.info("Successfully integrated %s results into chat system", analysis_type)
+        except Exception as e:
+            logger.exception("Error integrating analysis results: %s", e)
+        
     def clear_analysis_state(self):
         """Clear analysis state."""
         self.last_analysis = None

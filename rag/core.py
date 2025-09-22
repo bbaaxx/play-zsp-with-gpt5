@@ -267,13 +267,14 @@ class RAGPipeline:
         self,
         context_snippets: str,
         question: str,
+        system_prompt: Optional[str] = None,
         temperature: float = 0.2,
         max_tokens: int = 800
     ) -> str:
         """Generate an answer using the configured LLM providers."""
         user_prompt = build_user_prompt(context_snippets, question)
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt or SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ]
         

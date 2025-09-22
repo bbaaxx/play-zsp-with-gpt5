@@ -56,6 +56,8 @@ class AppState:
         self.file_manager = FileManager()
         self.chat_processor = ChatProcessor()
         self.analytics_engine = AnalyticsEngine()
+        # Connect analytics engine to chat processor for integration
+        self.analytics_engine.set_chat_processor(self.chat_processor)
         self.loaded_text: Optional[str] = None
         self.chat_dataframe = None
 
@@ -100,6 +102,24 @@ def clear_state():
     STATE.loaded_text = None
     STATE.chat_dataframe = None
     return [], "Estado limpiado."
+
+
+def initialize_chat_interface():
+    """Initialize chat interface with existing analysis context if available."""
+    try:
+        # Check if we have analysis results that should enhance the system prompt
+        if STATE.analytics_engine.last_adaptive_summary:
+            summary = STATE.analytics_engine.last_adaptive_summary
+            STATE.chat_processor.update_system_prompt_with_analysis(summary)
+            logger.info("Initialized chat with adaptive analysis context")
+        elif STATE.analytics_engine.last_analysis_summary:
+            summary = STATE.analytics_engine.last_analysis_summary
+            STATE.chat_processor.update_system_prompt_with_analysis(summary)
+            logger.info("Initialized chat with basic analysis context")
+        else:
+            logger.info("No existing analysis context found")
+    except Exception as e:
+        logger.exception("Error initializing chat interface: %s", e)
 
 
 def check_llm_status():
@@ -249,6 +269,9 @@ def build_ui() -> gr.Blocks:
         summary_btn.click(fn=get_analysis_summary, inputs=[], outputs=[status])
 
         def on_send(msg, k, m, use_mmr, lam, fk, senders, dfrom, dto):
+            # Initialize chat interface with analysis context if needed
+            initialize_chat_interface()
+            
             # normalize sender list
             senders_list = [s.strip() for s in (senders or "").split(',') if s.strip()]
             chat_hist, err = chat(
