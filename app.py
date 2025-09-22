@@ -137,14 +137,18 @@ def chat(
     return STATE.chat_processor.get_chat_history(), ""
 
 
-def analyze_chat(progress=gr.Progress()) -> str:
+def analyze_chat(progress=gr.Progress()) -> Tuple[str, str]:
     """Realiza un análisis inteligente del chat usando smolagents."""
-    return STATE.analytics_engine.analyze_chat_basic(STATE.chat_dataframe, progress)
+    detailed_results = STATE.analytics_engine.analyze_chat_basic(STATE.chat_dataframe, progress)
+    summary = STATE.analytics_engine.get_last_basic_summary() or "No se pudo generar resumen."
+    return summary, detailed_results
 
 
-def analyze_chat_adaptive(progress=gr.Progress()) -> str:
+def analyze_chat_adaptive(progress=gr.Progress()) -> Tuple[str, str]:
     """Realiza análisis adaptativo de dos etapas."""
-    return STATE.analytics_engine.analyze_chat_adaptive(STATE.chat_dataframe, progress)
+    detailed_results = STATE.analytics_engine.analyze_chat_adaptive(STATE.chat_dataframe, progress)
+    summary = STATE.analytics_engine.get_last_adaptive_summary() or "No se pudo generar resumen."
+    return summary, detailed_results
 
 
 def get_analysis_summary() -> str:
@@ -190,22 +194,38 @@ def build_ui() -> gr.Blocks:
                 send_btn = gr.Button("Enviar")
             
             with gr.Tab("📈 Análisis Básico"):
-                analysis_output = gr.Textbox(
-                    label="Resultados del Análisis Básico", 
-                    lines=30,
-                    interactive=False,
-                    show_copy_button=True,
-                    placeholder="Haz clic en 'Analizar Conversación' para ver insights básicos sobre el chat..."
-                )
+                with gr.Column():
+                    analysis_summary = gr.Textbox(
+                        label="🎯 Resumen Ejecutivo",
+                        lines=8,
+                        interactive=False,
+                        show_copy_button=True,
+                        placeholder="El resumen ejecutivo aparecerá aquí después del análisis..."
+                    )
+                    analysis_output = gr.Textbox(
+                        label="📊 Análisis Detallado", 
+                        lines=25,
+                        interactive=False,
+                        show_copy_button=True,
+                        placeholder="Haz clic en 'Analizar Conversación' para ver insights básicos sobre el chat..."
+                    )
             
             with gr.Tab("🎯 Análisis Adaptativo"):
-                adaptive_analysis_output = gr.Textbox(
-                    label="Resultados del Análisis Adaptativo", 
-                    lines=40,
-                    interactive=False,
-                    show_copy_button=True,
-                    placeholder="Haz clic en 'Análisis Adaptativo' para un análisis de dos etapas con agentes especializados..."
-                )
+                with gr.Column():
+                    adaptive_summary = gr.Textbox(
+                        label="🎯 Resumen Ejecutivo",
+                        lines=8,
+                        interactive=False,
+                        show_copy_button=True,
+                        placeholder="El resumen ejecutivo aparecerá aquí después del análisis..."
+                    )
+                    adaptive_analysis_output = gr.Textbox(
+                        label="📊 Análisis Detallado", 
+                        lines=35,
+                        interactive=False,
+                        show_copy_button=True,
+                        placeholder="Haz clic en 'Análisis Adaptativo' para un análisis de dos etapas con agentes especializados..."
+                    )
 
         def do_index(file):
             return index_file(file)
@@ -217,13 +237,13 @@ def build_ui() -> gr.Blocks:
         analyze_btn.click(
             fn=analyze_chat,
             inputs=[],
-            outputs=[analysis_output],
+            outputs=[analysis_summary, analysis_output],
             show_progress=True
         )
         adaptive_btn.click(
             fn=analyze_chat_adaptive,
             inputs=[],
-            outputs=[adaptive_analysis_output],
+            outputs=[adaptive_summary, adaptive_analysis_output],
             show_progress=True
         )
         summary_btn.click(fn=get_analysis_summary, inputs=[], outputs=[status])

@@ -10,6 +10,7 @@ from typing import Optional
 from dataclasses import dataclass
 
 from rag import ChatDataFrame, ChatAnalyzer, AnalysisResult, AdaptiveAnalyzer, AdaptiveAnalysisResult
+from rag.llm_providers import LLMManager
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,9 @@ class AnalyticsEngine:
         self.config = config or AnalysisConfig()
         self.last_analysis: Optional[AnalysisResult] = None
         self.last_adaptive_analysis: Optional[AdaptiveAnalysisResult] = None
+        self.last_analysis_summary: Optional[str] = None
+        self.last_adaptive_summary: Optional[str] = None
+        self.llm_manager = LLMManager()
     
     def _validate_configuration(self) -> Optional[str]:
         """Validate that required configuration is present."""
@@ -164,6 +168,42 @@ class AnalyticsEngine:
         
         return "\n".join(output)
     
+    def _generate_analysis_summary(self, analysis_text: str, analysis_type: str = "análisis") -> str:
+        """Generate an LLM-powered summary of analysis results."""
+        try:
+            messages = [
+                {
+                    "role": "system", 
+                    "content": f"""Eres un experto en análisis de datos conversacionales. Tu tarea es generar un resumen ejecutivo conciso y de alto nivel de los resultados del {analysis_type} de WhatsApp proporcionado.
+
+El resumen debe:
+1. Identificar los 3-4 hallazgos más importantes y relevantes
+2. Presentar insights clave de manera clara y procesable
+3. Usar un tono profesional pero accesible
+4. Mantenerse entre 200-300 palabras
+5. Usar bullet points o estructura clara
+6. Enfocarse en patrones, tendencias y anomalías significativas
+
+Responde SOLO con el resumen, sin preámbulos ni explicaciones adicionales."""
+                },
+                {
+                    "role": "user", 
+                    "content": f"Por favor, genera un resumen ejecutivo de este {analysis_type}:\n\n{analysis_text}"
+                }
+            ]
+            
+            summary = self.llm_manager.generate_response(
+                messages=messages,
+                temperature=0.3,
+                max_tokens=400
+            )
+            
+            return summary.strip()
+            
+        except Exception as e:
+            logger.exception("Error generando resumen del análisis")
+            return f"⚠️ Error generando resumen: {e}"
+    
     def analyze_chat_basic(self, chat_dataframe: ChatDataFrame, progress_callback=None) -> str:
         """Perform basic intelligent chat analysis using smolagents."""
         if progress_callback is not None:
@@ -196,9 +236,14 @@ class AnalyticsEngine:
             
             if progress_callback is not None:
                 progress_callback(0.8, desc="Procesando resultados...")
-                progress_callback(0.9, desc="Formateando resultados...")
             
             formatted_results = self._format_basic_analysis_results(result)
+            
+            if progress_callback is not None:
+                progress_callback(0.9, desc="Generando resumen ejecutivo...")
+            
+            # Generate LLM-powered summary
+            self.last_analysis_summary = self._generate_analysis_summary(formatted_results, "análisis básico")
             
             if progress_callback is not None:
                 progress_callback(1.0, desc="✅ Análisis completado")
@@ -243,9 +288,15 @@ class AnalyticsEngine:
             self.last_adaptive_analysis = result
             
             if progress_callback is not None:
-                progress_callback(0.95, desc="Formateando resultados...")
+                progress_callback(0.92, desc="Formateando resultados...")
             
             formatted_results = self._format_adaptive_analysis_results(result)
+            
+            if progress_callback is not None:
+                progress_callback(0.96, desc="Generando resumen ejecutivo...")
+            
+            # Generate LLM-powered summary
+            self.last_adaptive_summary = self._generate_analysis_summary(formatted_results, "análisis adaptativo")
             
             if progress_callback is not None:
                 progress_callback(1.0, desc="✅ Análisis adaptativo completado")
@@ -287,8 +338,18 @@ class AnalyticsEngine:
         
         return "\n".join(summary)
     
+    def get_last_basic_summary(self) -> Optional[str]:
+        """Get the summary of the last basic analysis."""
+        return self.last_analysis_summary
+    
+    def get_last_adaptive_summary(self) -> Optional[str]:
+        """Get the summary of the last adaptive analysis."""
+        return self.last_adaptive_summary
+    
     def clear_analysis_state(self):
         """Clear analysis state."""
         self.last_analysis = None
         self.last_adaptive_analysis = None
+        self.last_analysis_summary = None
+        self.last_adaptive_summary = None
         logger.info("Estado de análisis limpiado")
