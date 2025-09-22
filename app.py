@@ -192,18 +192,18 @@ def build_ui() -> gr.Blocks:
             with gr.Tab("📈 Análisis Básico"):
                 analysis_output = gr.Textbox(
                     label="Resultados del Análisis Básico", 
-                    lines=20, 
-                    max_lines=30,
+                    lines=30,
                     interactive=False,
+                    show_copy_button=True,
                     placeholder="Haz clic en 'Analizar Conversación' para ver insights básicos sobre el chat..."
                 )
             
             with gr.Tab("🎯 Análisis Adaptativo"):
                 adaptive_analysis_output = gr.Textbox(
                     label="Resultados del Análisis Adaptativo", 
-                    lines=25, 
-                    max_lines=40,
+                    lines=40,
                     interactive=False,
+                    show_copy_button=True,
                     placeholder="Haz clic en 'Análisis Adaptativo' para un análisis de dos etapas con agentes especializados..."
                 )
 

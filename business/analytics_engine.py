@@ -110,7 +110,9 @@ class AnalyticsEngine:
                 confidence_text = "🟢 Alta" if context.confidence > 0.7 else "🟡 Media" if context.confidence > 0.4 else "🔴 Baja"
                 output.append(f"\n{i}. **{context.category.replace('_', ' ').title()}** - {confidence_text} ({context.confidence:.1%})")
                 if context.evidence:
-                    output.append(f"   📋 Evidencia: {'; '.join(context.evidence[:2])}")
+                    output.append(f"   📋 Evidencia:")
+                    for evidence_item in context.evidence:
+                        output.append(f"     • {evidence_item}")
         else:
             output.append("No se detectaron contextos específicos.")
         
@@ -125,10 +127,14 @@ class AnalyticsEngine:
                     for focus_area, analysis in analyses.items():
                         if analysis and isinstance(analysis, str):
                             area_name = focus_area.replace('_', ' ').title()
-                            # Tomar primera línea significativa del análisis
-                            lines = [line.strip() for line in analysis.split('\n') if line.strip()]
-                            preview = lines[0] if lines else analysis[:100]
-                            output.append(f"   • **{area_name}**: {preview[:200]}...")
+                            # Show complete analysis without truncation
+                            output.append(f"   • **{area_name}**:")
+                            # Format the analysis with proper indentation
+                            analysis_lines = analysis.strip().split('\n')
+                            for line in analysis_lines:
+                                if line.strip():
+                                    output.append(f"     {line}")
+                            output.append("")  # Add blank line for readability
                 elif "error" in analyses:
                     output.append(f"   ⚠️ Error en análisis: {analyses['error']}")
         else:

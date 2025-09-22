@@ -202,7 +202,7 @@ class ContextDetector:
                     "date_range_days": (df['timestamp'].max() - df['timestamp'].min()).days if not df.empty else 0,
                 },
                 "detected_trends": trends_summary,
-                "sample_messages": sample_messages[:20]  # Limitar muestra para LLM
+                "sample_messages": sample_messages
             }
             
             prompt = f"""
@@ -314,8 +314,8 @@ class ContextDetector:
         merged_contexts = list(context_groups.values())
         merged_contexts.sort(key=lambda x: x.confidence, reverse=True)
         
-        # Retornar top 3 contextos más probables
-        return merged_contexts[:3]
+        # Return all contexts without limiting
+        return merged_contexts
 
 
 class SpecializedAgentFactory:
@@ -547,7 +547,7 @@ class AdaptiveAnalyzer:
             "chat_summary": {
                 "total_messages": len(df),
                 "participants": df['author'].nunique(),
-                "main_trends": [trend.description for trend in basic_analysis.trend_summaries[:3]]
+                "main_trends": [trend.description for trend in basic_analysis.trend_summaries]
             },
             "sample_messages": sample_messages
         }
@@ -605,7 +605,9 @@ class AdaptiveAnalyzer:
             
             # Evidencia del contexto principal
             if main_context.evidence:
-                insights.append(f"📋 **Evidencia**: {'; '.join(main_context.evidence[:3])}")
+                insights.append(f"📋 **Evidencia**:")
+                for evidence_item in main_context.evidence:
+                    insights.append(f"  • {evidence_item}")
         
         # Insights de análisis especializados
         for context_type, analyses in specialized_analyses.items():
@@ -615,18 +617,21 @@ class AdaptiveAnalyzer:
                 
                 for focus_area, analysis in analyses.items():
                     if analysis and isinstance(analysis, str) and len(analysis) > 10:
-                        # Extractar la primera línea o punto clave
-                        lines = analysis.split('\n')
-                        key_point = next((line.strip() for line in lines if line.strip() and not line.strip().startswith('*')), "")
-                        if key_point:
-                            insights.append(f"  • {focus_area.replace('_', ' ').title()}: {key_point[:150]}...")
+                        area_name = focus_area.replace('_', ' ').title()
+                        insights.append(f"  • **{area_name}**:")
+                        # Show complete analysis without truncation
+                        analysis_lines = analysis.strip().split('\n')
+                        for line in analysis_lines:
+                            if line.strip():
+                                insights.append(f"    {line.strip()}")
+                        insights.append("")  # Add blank line
         
         # Insight combinado basado en análisis múltiples
         if len(contexts) > 1:
-            context_names = [ctx.category.replace('_', ' ').title() for ctx in contexts[:2]]
+            context_names = [ctx.category.replace('_', ' ').title() for ctx in contexts]
             insights.append(
                 f"🔄 **Conversación Multifacética**: Esta conversación combina elementos de "
-                f"{' y '.join(context_names)}, sugiriendo una relación compleja y multidimensional."
+                f"{', '.join(context_names)}, sugiriendo una relación compleja y multidimensional."
             )
         
         # Insight temporal si hay suficiente variedad en análises
@@ -636,4 +641,4 @@ class AdaptiveAnalyzer:
                 f"especializados, proporcionando una visión 360° de la conversación."
             )
         
-        return insights[:8]  # Limitar a 8 insights máximo
+        return insights  # Return all insights without limiting
