@@ -6,9 +6,6 @@ import gradio as gr
 from typing import List, Tuple, Optional
 from dotenv import load_dotenv
 
-# Load .env file with override=True to take precedence over existing env vars
-load_dotenv(override=True)
-
 from business import FileManager, ChatProcessor, AnalyticsEngine
 
 try:
@@ -16,6 +13,8 @@ try:
 except Exception:
     OpenAI = None  # type: ignore
 
+# Load .env file with override=True to take precedence over existing env vars
+load_dotenv(override=True)
 # Set environment variable to disable tokenizers parallelism warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -43,9 +42,6 @@ try:
         _gc_utils.get_type = _safe_get_type  # type: ignore
 except Exception:
     pass
-
-
-load_dotenv(override=True)
 
 # Basic logging setup
 logging.basicConfig(

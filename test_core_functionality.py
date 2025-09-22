@@ -92,19 +92,22 @@ def test_integration_structure():
         with open('app.py', 'r') as f:
             app_content = f.read()
         
-        # Check for our new functions
-        checks = [
-            ('analyze_chat_adaptive' in app_content, "analyze_chat_adaptive function"),
-            ('last_adaptive_analysis' in app_content, "last_adaptive_analysis state field"),
-            ('AdaptiveAnalyzer' in app_content, "AdaptiveAnalyzer import"),
-            ('🎯 Análisis Adaptativo' in app_content, "adaptive analysis UI tab"),
+        # Check for adaptive analysis functionality in handlers (file-based check)
+        with open('ui/handlers.py', 'r') as f:
+            handlers_content = f.read()
+        
+        handler_checks = [
+            ('def analyze_chat_adaptive' in handlers_content, "analyze_chat_adaptive function"),
+            ('last_adaptive_analysis' in handlers_content, "last_adaptive_analysis state field"),
+            ('AdaptiveAnalyzer' in handlers_content, "AdaptiveAnalyzer import"),
+            ('AdaptiveAnalysisResult' in handlers_content, "AdaptiveAnalysisResult import"),
         ]
         
-        for check, description in checks:
+        for check, description in handler_checks:
             if check:
-                print(f"✅ {description} found in app.py")
+                print(f"✅ {description} found in ui.handlers")
             else:
-                print(f"❌ {description} NOT found in app.py")
+                print(f"❌ {description} NOT found in ui.handlers")
                 return False
         
         print("✅ All integration structure checks passed")
