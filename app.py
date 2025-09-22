@@ -238,8 +238,8 @@ def _fetch_github_models() -> List[str]:
         return _get_github_models_fallback()
     
     try:
-        # Use the correct GitHub API endpoint for models
-        url = "https://api.github.com/models"
+        # Use the correct GitHub Models catalog API endpoint
+        url = "https://models.github.ai/catalog/models"
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
@@ -258,19 +258,22 @@ def _fetch_github_models() -> List[str]:
                 # Direct model list from GitHub API
                 for model in data:
                     if isinstance(model, dict):
-                        model_id = model.get("name") or model.get("id")
+                        # Use the 'id' field which contains the actual model identifier for API calls
+                        model_id = model.get("id")
                         if model_id:
+                            # Keep the full model identifier as returned by GitHub API (e.g., "openai/gpt-4o")
+                            # Don't strip anything - we'll handle vendor prefixes during inference calls
                             # Filter for text generation models (exclude embedding models)
                             model_type = model.get("type", "").lower()
                             tags = model.get("tags", [])
-                            
+
                             # Include models that are for text generation/chat
-                            if (not model_type or 
+                            if (not model_type or
                                 model_type in ["text-generation", "conversational", "chat"] or
                                 "chat" in tags or
                                 "text-generation" in tags or
                                 "conversational" in tags):
-                                
+
                                 # Skip embedding models specifically
                                 if not (model_type == "embedding" or "embedding" in tags):
                                     models.append(model_id)
@@ -281,17 +284,20 @@ def _fetch_github_models() -> List[str]:
                 if isinstance(model_list, list):
                     for model in model_list:
                         if isinstance(model, dict):
-                            model_id = model.get("name") or model.get("id")
+                            # Use the 'id' field which contains the actual model identifier for API calls
+                            model_id = model.get("id")
                             if model_id:
+                                # Keep the full model identifier as returned by GitHub API (e.g., "openai/gpt-4o")
+                                # Don't strip anything - we'll handle vendor prefixes during inference calls
                                 model_type = model.get("type", "").lower()
                                 tags = model.get("tags", [])
-                                
-                                if (not model_type or 
+
+                                if (not model_type or
                                     model_type in ["text-generation", "conversational", "chat"] or
                                     "chat" in tags or
                                     "text-generation" in tags or
                                     "conversational" in tags):
-                                    
+
                                     if not (model_type == "embedding" or "embedding" in tags):
                                         models.append(model_id)
             
@@ -321,17 +327,17 @@ def _get_github_models_fallback() -> List[str]:
         "gpt-3.5-turbo",
         "gpt-4",
         "gpt-4-turbo",
-        
+
         # Microsoft Phi models
         "Phi-3-medium-128k-instruct",
-        "Phi-3-medium-4k-instruct", 
+        "Phi-3-medium-4k-instruct",
         "Phi-3-mini-128k-instruct",
         "Phi-3-mini-4k-instruct",
         "Phi-3-small-128k-instruct",
         "Phi-3-small-8k-instruct",
         "Phi-3.5-mini-instruct",
         "Phi-3.5-MoE-instruct",
-        
+
         # Meta Llama models
         "Llama-3.2-11B-Vision-Instruct",
         "Llama-3.2-90B-Vision-Instruct",
@@ -342,7 +348,7 @@ def _get_github_models_fallback() -> List[str]:
         "Meta-Llama-3.1-405B-Instruct",
         "Meta-Llama-3.1-70B-Instruct",
         "Meta-Llama-3.1-8B-Instruct",
-        
+
         # Mistral models
         "Mistral-7B-Instruct-v0.1",
         "Mistral-7B-Instruct-v0.3",
@@ -350,14 +356,14 @@ def _get_github_models_fallback() -> List[str]:
         "Mistral-large-2407",
         "Mistral-Nemo",
         "Mistral-small",
-        
-        # Cohere models  
+
+        # Cohere models
         "Cohere-command-r",
         "Cohere-command-r-plus",
-        
+
         # AI21 models
-        "jamba-1.5-large",
-        "jamba-1.5-mini"
+        "AI21-Jamba-1.5-Large",
+        "AI21-Jamba-1.5-Mini"
     ]
 
 
@@ -386,8 +392,8 @@ def _fetch_github_embedding_models() -> List[str]:
         return _get_github_embedding_models_fallback()
     
     try:
-        # Use the correct GitHub API endpoint for models
-        url = "https://api.github.com/models"
+        # Use the correct GitHub Models catalog API endpoint
+        url = "https://models.github.ai/catalog/models"
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
@@ -406,14 +412,17 @@ def _fetch_github_embedding_models() -> List[str]:
                 # Direct model list from GitHub API
                 for model in data:
                     if isinstance(model, dict):
-                        model_id = model.get("name") or model.get("id")
+                        # Use the 'id' field which contains the actual model identifier for API calls
+                        model_id = model.get("id")
                         if model_id:
+                            # Keep the full model identifier as returned by GitHub API (e.g., "openai/text-embedding-3-small")
+                            # Don't strip anything - we'll handle vendor prefixes during inference calls
                             # Filter for embedding models
                             model_type = model.get("type", "").lower()
                             tags = model.get("tags", [])
-                            
+
                             # Include models that are specifically for embedding
-                            if (model_type == "embedding" or 
+                            if (model_type == "embedding" or
                                 "embedding" in tags or
                                 "embedding" in model_id.lower()):
                                 models.append(model_id)
@@ -424,12 +433,15 @@ def _fetch_github_embedding_models() -> List[str]:
                 if isinstance(model_list, list):
                     for model in model_list:
                         if isinstance(model, dict):
-                            model_id = model.get("name") or model.get("id")
+                            # Use the 'id' field which contains the actual model identifier for API calls
+                            model_id = model.get("id")
                             if model_id:
+                                # Keep the full model identifier as returned by GitHub API (e.g., "openai/text-embedding-3-small")
+                                # Don't strip anything - we'll handle vendor prefixes during inference calls
                                 model_type = model.get("type", "").lower()
                                 tags = model.get("tags", [])
-                                
-                                if (model_type == "embedding" or 
+
+                                if (model_type == "embedding" or
                                     "embedding" in tags or
                                     "embedding" in model_id.lower()):
                                     models.append(model_id)

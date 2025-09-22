@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import logging
+import time
 from typing import Optional
 from dataclasses import dataclass
 
@@ -256,6 +257,10 @@ Responde SOLO con el resumen, sin preámbulos ni explicaciones adicionales."""
             if progress_callback is not None:
                 progress_callback(0.9, desc="Generando resumen ejecutivo...")
             
+            # Add throttling delay before summary generation to prevent burst
+            logger.debug("Throttling: waiting 3s before summary generation")
+            time.sleep(3.0)
+            
             # Generate LLM-powered summary
             self.last_analysis_summary = self._generate_analysis_summary(formatted_results, "análisis básico")
             
@@ -311,6 +316,10 @@ Responde SOLO con el resumen, sin preámbulos ni explicaciones adicionales."""
             
             if progress_callback is not None:
                 progress_callback(0.96, desc="Generando resumen ejecutivo...")
+            
+            # Add throttling delay before summary generation to prevent burst
+            logger.debug("Throttling: waiting 3s before adaptive summary generation")
+            time.sleep(3.0)
             
             # Generate LLM-powered summary
             self.last_adaptive_summary = self._generate_analysis_summary(formatted_results, "análisis adaptativo")

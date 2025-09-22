@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import re
@@ -551,10 +552,17 @@ class AdaptiveAnalyzer:
         logger.info(f"Etapa 3: Creando agentes especializados para {len(detected_contexts)} contextos")
         specialized_agents = SpecializedAgentFactory.create_agents(detected_contexts)
         
-        # ETAPA 4: Análisis especializado
+        # ETAPA 4: Análisis especializado con throttling
         specialized_analyses = {}
-        for agent in specialized_agents:
+        for i, agent in enumerate(specialized_agents):
             logger.info(f"Ejecutando análisis especializado: {agent.name}")
+            
+            # Add delay between specialized agents to prevent request bursts
+            if i > 0:
+                throttle_delay = 2.0  # 2 second delay between agents
+                logger.debug(f"Throttling: waiting {throttle_delay}s before next specialized agent")
+                time.sleep(throttle_delay)
+            
             try:
                 analysis = self._run_specialized_analysis(agent, data_frame, basic_analysis)
                 specialized_analyses[agent.context_category] = analysis
@@ -617,9 +625,15 @@ class AdaptiveAnalyzer:
         
         analyses = {}
         
-        # Ejecutar cada tipo de análisis especializado
-        for focus_area in agent.analysis_focus:
+        # Ejecutar cada tipo de análisis especializado con throttling
+        for i, focus_area in enumerate(agent.analysis_focus):
             if focus_area in agent.specialized_prompts:
+                # Add delay between focus area requests to prevent bursts
+                if i > 0:
+                    focus_delay = 1.0  # 1 second delay between focus areas
+                    logger.debug(f"Throttling: waiting {focus_delay}s before next focus area")
+                    time.sleep(focus_delay)
+                
                 try:
                     prompt = f"""
                     {agent.system_prompt}

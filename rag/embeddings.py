@@ -216,7 +216,14 @@ class EmbeddingProvider:
             "Authorization": f"Bearer {self._remote_token}",  # type: ignore[operator]
             "Content-Type": "application/json",
         }
-        payload = {"model": self.remote_model_name, "input": batch}
+        
+        # Strip vendor prefix from model name for inference API
+        # GitHub Models catalog returns "openai/text-embedding-3-small" but inference expects "text-embedding-3-small"
+        inference_model_name = self.remote_model_name
+        if "/" in inference_model_name:
+            inference_model_name = inference_model_name.split("/", 1)[1]
+        
+        payload = {"model": inference_model_name, "input": batch}
         with httpx.Client(timeout=60.0) as http:
             resp = http.post(url, json=payload, headers=headers)
         resp.raise_for_status()

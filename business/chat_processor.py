@@ -231,15 +231,33 @@ class ChatProcessor:
                 try:
                     user_prompt = build_user_prompt(context, user_msg)
                     system_prompt = self.get_system_prompt()
-                    resp = client.chat.completions.create(
-                        model=model_name or os.environ.get("CHAT_MODEL", "openai/gpt-4o"),
-                        messages=[
+                    
+                    # Strip vendor prefix from model name for inference API
+                    # GitHub Models catalog returns "openai/gpt-4o" but inference expects "gpt-4o"
+                    inference_model = model_name or os.environ.get("CHAT_MODEL", "gpt-4o")
+                    original_model = inference_model
+                    if "/" in inference_model:
+                        inference_model = inference_model.split("/", 1)[1]
+                    
+                    logger.info("Legacy client using model: '%s' (original: '%s')", inference_model, original_model)
+                    
+                    # Try with appropriate token parameter based on model
+                    completion_params = {
+                        "model": inference_model,
+                        "messages": [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},
                         ],
-                        temperature=0.2,
-                        max_tokens=800,
-                    )
+                        "temperature": 0.2,
+                    }
+                    
+                    # Use max_completion_tokens for newer models
+                    if "gpt-5" in inference_model or "o1" in inference_model or "o3" in inference_model or "o4" in inference_model:
+                        completion_params["max_completion_tokens"] = 800
+                    else:
+                        completion_params["max_tokens"] = 800
+                    
+                    resp = client.chat.completions.create(**completion_params)
                     answer = resp.choices[0].message.content or "(sin contenido)"
                     logger.info("Respuesta LLM legacy generada (%d chars)", len(answer))
                 except Exception as legacy_e:
