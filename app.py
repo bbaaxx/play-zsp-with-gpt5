@@ -322,48 +322,48 @@ def _get_github_models_fallback() -> List[str]:
     """Get fallback list of known GitHub Models."""
     return [
         # OpenAI models
-        "gpt-4o",
-        "gpt-4o-mini",
-        "gpt-3.5-turbo",
-        "gpt-4",
-        "gpt-4-turbo",
+        "openai/gpt-4o",
+        "openai/gpt-4o-mini",
+        "openai/gpt-3.5-turbo",
+        "openai/gpt-4",
+        "openai/gpt-4-turbo",
 
         # Microsoft Phi models
-        "Phi-3-medium-128k-instruct",
-        "Phi-3-medium-4k-instruct",
-        "Phi-3-mini-128k-instruct",
-        "Phi-3-mini-4k-instruct",
-        "Phi-3-small-128k-instruct",
-        "Phi-3-small-8k-instruct",
-        "Phi-3.5-mini-instruct",
-        "Phi-3.5-MoE-instruct",
+        "microsoft/phi-3-medium-128k-instruct",
+        "microsoft/phi-3-medium-4k-instruct",
+        "microsoft/phi-3-mini-128k-instruct",
+        "microsoft/phi-3-mini-4k-instruct",
+        "microsoft/phi-3-small-128k-instruct",
+        "microsoft/phi-3-small-8k-instruct",
+        "microsoft/phi-3.5-mini-instruct",
+        "microsoft/phi-3.5-moe-instruct",
 
         # Meta Llama models
-        "Llama-3.2-11B-Vision-Instruct",
-        "Llama-3.2-90B-Vision-Instruct",
-        "Llama-3.2-1B-Instruct",
-        "Llama-3.2-3B-Instruct",
-        "Meta-Llama-3-70B-Instruct",
-        "Meta-Llama-3-8B-Instruct",
-        "Meta-Llama-3.1-405B-Instruct",
-        "Meta-Llama-3.1-70B-Instruct",
-        "Meta-Llama-3.1-8B-Instruct",
+        "meta/llama-3.2-11b-vision-instruct",
+        "meta/llama-3.2-90b-vision-instruct",
+        "meta/llama-3.2-1b-instruct",
+        "meta/llama-3.2-3b-instruct",
+        "meta/meta-llama-3-70b-instruct",
+        "meta/meta-llama-3-8b-instruct",
+        "meta/meta-llama-3.1-405b-instruct",
+        "meta/meta-llama-3.1-70b-instruct",
+        "meta/meta-llama-3.1-8b-instruct",
 
         # Mistral models
-        "Mistral-7B-Instruct-v0.1",
-        "Mistral-7B-Instruct-v0.3",
-        "Mistral-large",
-        "Mistral-large-2407",
-        "Mistral-Nemo",
-        "Mistral-small",
+        "mistral-ai/mistral-7b-instruct-v0.1",
+        "mistral-ai/mistral-7b-instruct-v0.3",
+        "mistral-ai/mistral-large",
+        "mistral-ai/mistral-large-2407",
+        "mistral-ai/mistral-nemo",
+        "mistral-ai/mistral-small",
 
         # Cohere models
-        "Cohere-command-r",
-        "Cohere-command-r-plus",
+        "cohere/cohere-command-r",
+        "cohere/cohere-command-r-plus",
 
         # AI21 models
-        "AI21-Jamba-1.5-Large",
-        "AI21-Jamba-1.5-Mini"
+        "ai21-labs/ai21-jamba-1.5-large",
+        "ai21-labs/ai21-jamba-1.5-mini"
     ]
 
 
@@ -466,9 +466,9 @@ def _get_github_embedding_models_fallback() -> List[str]:
     """Get fallback list of known GitHub embedding models."""
     return [
         # OpenAI embedding models
-        "text-embedding-3-small",
-        "text-embedding-3-large", 
-        "text-embedding-ada-002"
+        "openai/text-embedding-3-small",
+        "openai/text-embedding-3-large", 
+        "openai/text-embedding-ada-002"
     ]
 
 
@@ -565,7 +565,7 @@ def build_ui() -> gr.Blocks:
                     )
                     analysis_model = gr.Dropdown(
                         choices=get_available_models("github_models"),
-                        value="gpt-4o",
+                        value="openai/gpt-4o",
                         label="Modelo para Análisis"
                     )
                     analysis_refresh_btn = gr.Button("🔄", size="sm", variant="secondary")
@@ -580,7 +580,7 @@ def build_ui() -> gr.Blocks:
                     )
                     chat_model = gr.Dropdown(
                         choices=get_available_models("github_models"),
-                        value="gpt-4o",
+                        value="openai/gpt-4o",
                         label="Modelo para Chat"
                     )
                     chat_refresh_btn = gr.Button("🔄", size="sm", variant="secondary")
